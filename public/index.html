@@ -11,6 +11,11 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/logo512.png" />
     <title>CIRMI App</title>
   </head>
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+</script>
   <body>
     <noscript>Necesitas JavaScript para usar CIRMI App.</noscript>
     <div id="root"></div>

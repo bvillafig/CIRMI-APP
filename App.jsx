@@ -1,27 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── SUPABASE ─────────────────────────────────────────────────
 const SB_URL = "https://itcarcntzopvchxoeyzv.supabase.co";
 const SB_KEY = "sb_publishable_sp21Q5eB6VqFrSgGjz28jQ_LMVoSmCk";
 const API     = (t) => `${SB_URL}/rest/v1/${t}`;
 const STORAGE = `${SB_URL}/storage/v1`;
 const AUTH_EP = (p) => `${SB_URL}/auth/v1/${p}`;
-
-const H = (tok) => ({ "Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${tok||SB_KEY}`,"Prefer":"return=representation" });
+const H = (tok) => ({"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${tok||SB_KEY}`,"Prefer":"return=representation"});
 const dbGet    = async (t,q="",tok)  => { const r=await fetch(`${API(t)}?${q}`,{headers:H(tok)}); if(!r.ok)throw new Error(await r.text()); return r.json(); };
 const dbInsert = async (t,d,tok)     => { const r=await fetch(API(t),{method:"POST",headers:H(tok),body:JSON.stringify(d)}); if(!r.ok)throw new Error(await r.text()); return r.json(); };
 const dbUpdate = async (t,id,d,tok)  => { const r=await fetch(`${API(t)}?id=eq.${id}`,{method:"PATCH",headers:H(tok),body:JSON.stringify(d)}); if(!r.ok)throw new Error(await r.text()); return r.json(); };
 const dbDelete = async (t,id,tok)    => { const r=await fetch(`${API(t)}?id=eq.${id}`,{method:"DELETE",headers:H(tok)}); if(!r.ok)throw new Error(await r.text()); };
-
 const authSignUp = async (email,pwd,nombre) => { const r=await fetch(AUTH_EP("signup"),{method:"POST",headers:{"Content-Type":"application/json","apikey":SB_KEY},body:JSON.stringify({email,password:pwd,data:{nombre}})}); return r.json(); };
 const authSignIn = async (email,pwd) => { const r=await fetch(`${AUTH_EP("token")}?grant_type=password`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SB_KEY},body:JSON.stringify({email,password:pwd})}); return r.json(); };
 const authSignOut = async (tok) => { await fetch(AUTH_EP("logout"),{method:"POST",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`}}); };
-
 const uploadDoc = async (path,file,tok) => { const r=await fetch(`${STORAGE}/object/documentos/${path}`,{method:"POST",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`,"Content-Type":file.type,"x-upsert":"true"},body:file}); return r.json(); };
 const getSignedUrl = async (path,tok) => { const r=await fetch(`${STORAGE}/object/sign/documentos/${path}`,{method:"POST",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:3600})}); const d=await r.json(); return `${SB_URL}${d.signedURL}`; };
 const deleteStorageFile = async (path,tok) => { await fetch(`${STORAGE}/object/documentos`,{method:"DELETE",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`,"Content-Type":"application/json"},body:JSON.stringify({prefixes:[path]})}); };
 
-// ─── BRAND ────────────────────────────────────────────────────
 const B={slate:"#4A6079",slateDark:"#2E3F52",slateLight:"#6B8299",gold:"#F5C842",goldLight:"#FDF3C0",goldDark:"#D4A820",bg:"#F2F5F8",white:"#FFFFFF",text:"#1C2B3A",muted:"#7A90A4",border:"#DDE4EB"};
 const ACCENTS=[B.slate,B.slateDark,B.slateLight,"#3D6B8C","#6B4F9A","#2E7D52"];
 const COLORES=["#4A6079","#2E3F52","#6B8299","#D4A820","#8B6914","#3D6B8C","#6B4F9A","#2E7D52","#B91C1C","#1D6FA4"];
@@ -31,8 +26,6 @@ const DIAS_H=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const CAT_DOCS=["Consentimientos","Hojas de información","Protocolos","Formularios","Otros"];
 const HOSP_PUBLICO="Hospital Público";
-
-// Roles
 const ROL_ADMIN="admin";
 const ROL_CIR_PRINCIPAL="cirujano_principal";
 const ROL_CIRUJANO="cirujano";
@@ -45,21 +38,17 @@ const fmt=(d)=>{const x=new Date(d);x.setHours(12);return x.toISOString().split(
 const todayStr=fmt(today);
 const newId=()=>`CIR-${Date.now().toString().slice(-6)}`;
 const fmtSize=(b)=>b<1024?`${b}B`:b<1048576?`${(b/1024).toFixed(1)}KB`:`${(b/1048576).toFixed(1)}MB`;
-
 const ceColor=(e)=>({"Confirmada":"#2E7D52","Pendiente":"#9A6B00","Realizada":B.slate,"Cancelada":"#B91C1C"}[e]||B.muted);
 const bEst=(e)=>({"Confirmada":"#E6F4EC","Pendiente":B.goldLight,"Realizada":"#E8EDF2","Cancelada":"#FEE2E2"}[e]||"#F1F5F9");
 const cFact=(e)=>({"Pendiente":"#9A6B00","Facturada":B.slate,"En revisión":"#B91C1C","Cobrada":"#2E7D52"}[e]||B.muted);
 const bFact=(e)=>({"Pendiente":B.goldLight,"Facturada":"#E8EDF2","En revisión":"#FEE2E2","Cobrada":"#E6F4EC"}[e]||"#F1F5F9");
-
 const useWindowWidth=()=>{const[w,setW]=useState(window.innerWidth);useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w;};
 
-// ─── MINI COMPONENTS ──────────────────────────────────────────
 const Bdg=({label,bg,color,style={}})=><span style={{display:"inline-flex",alignItems:"center",padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600,background:bg,color,whiteSpace:"nowrap",...style}}>{label}</span>;
 const FG=({label,children,style={}})=>(<div style={style}><label style={{display:"block",fontSize:11,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>{label}</label>{children}</div>);
 const ColH=({children})=><div style={{fontSize:11,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.5}}>{children}</div>;
 const Spin=({text="Cargando..."})=>(<div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"60px 0",gap:14}}><div style={{width:32,height:32,border:`3px solid ${B.border}`,borderTopColor:B.slate,borderRadius:"50%",animation:"spin 1s linear infinite"}}/><div style={{color:B.muted,fontSize:13}}>{text}</div></div>);
 
-// ─── CALENDARIO MENSUAL ────────────────────────────────────────
 function CalMes({year,month,renderDay,onPrev,onNext,onToday}){
   const first=new Date(year,month,1),last=new Date(year,month+1,0);
   let sd=first.getDay()-1;if(sd<0)sd=6;
@@ -87,7 +76,6 @@ function CalMes({year,month,renderDay,onPrev,onNext,onToday}){
   );
 }
 
-// ─── AUTH SCREENS ─────────────────────────────────────────────
 function AuthScreen({onAuth}){
   const[mode,setMode]=useState("login");
   const[form,setForm]=useState({email:"",password:"",nombre:"",confirm:""});
@@ -140,18 +128,13 @@ function AuthScreen({onAuth}){
 function PendingScreen({perfil,onLogout}){return(<div style={{minHeight:"100vh",background:`linear-gradient(135deg,${B.slateDark},${B.slate})`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:"white",borderRadius:20,padding:40,textAlign:"center",maxWidth:400,boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}><div style={{fontSize:48,marginBottom:14}}>⏳</div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:8}}>Solicitud pendiente</h2><p style={{fontSize:13,color:B.muted,lineHeight:1.6,marginBottom:20}}>Hola <strong>{perfil?.nombre||perfil?.email}</strong>, el administrador revisará tu solicitud en breve.</p><button onClick={onLogout} className="btn-sec" style={{fontSize:13}}>Cerrar sesión</button></div></div>);}
 function BlockedScreen({onLogout}){return(<div style={{minHeight:"100vh",background:`linear-gradient(135deg,${B.slateDark},${B.slate})`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:"white",borderRadius:20,padding:40,textAlign:"center",maxWidth:400,boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}><div style={{fontSize:48,marginBottom:14}}>🚫</div><h2 style={{fontSize:20,fontWeight:700,color:"#B91C1C",marginBottom:8}}>Acceso bloqueado</h2><p style={{fontSize:13,color:B.muted,marginBottom:20}}>Tu cuenta ha sido desactivada. Contacta con el administrador.</p><button onClick={onLogout} className="btn-sec" style={{fontSize:13}}>Cerrar sesión</button></div></div>);}
 
-// ═══════════════════════════════════════════════════════════════
 export default function App(){
   const w=useWindowWidth();
   const mob=w<768;
-
-  // Auth
   const[session,setSession]=useState(null);
   const[authUser,setAuthUser]=useState(null);
   const[perfil,setPerfil]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
-
-  // App state
   const[tab,setTab]=useState("agenda");
   const[showNav,setShowNav]=useState(false);
   const[cirugias,setCirugias]=useState([]);
@@ -177,32 +160,33 @@ export default function App(){
   const[dispY,setDispY]=useState(today.getFullYear());
   const[dispM,setDispM]=useState(today.getMonth());
   const[filtFact,setFiltFact]=useState("Todos");
-  const[filtCir,setFiltCir]=useState("Todos");
-  const[filtCli,setFiltCli]=useState("Todos");
   const[filtCat,setFiltCat]=useState("Todos");
   const[configTab,setConfigTab]=useState("personal");
   const[guardHosp,setGuardHosp]=useState(null);
   const[loading,setLoading]=useState(true);
   const[saving,setSaving]=useState(false);
   const[uploading,setUploading]=useState(false);
+  // ── MODO VISTA ADMIN ──
+  const[vistaRol,setVistaRol]=useState("");
   const fileRef=useRef();
 
-  // Role helpers
+  // ── Roles reales ──
   const isAdmin=perfil?.rol==="admin"||perfil?.rol_app===ROL_ADMIN;
-  const rolApp=perfil?.rol_app||ROL_CIRUJANO;
-  const isCirPrincipal=rolApp===ROL_CIR_PRINCIPAL||isAdmin;
-  const isCirujano=rolApp===ROL_CIRUJANO;
-  const isEnfermero=rolApp===ROL_ENFERMERO;
-  const canCreateCx=isAdmin||isCirPrincipal; // Cirujano NO puede crear cirugías
-  const canSeeFacturacion=isAdmin;
-  const canSeePersonal=isAdmin;
-  const canSeeHospPublico=isAdmin||isCirPrincipal;
+
+  // ── Rol efectivo (admin puede simular otro rol) ──
+  const rolEfectivo=isAdmin&&vistaRol?vistaRol:(perfil?.rol_app||ROL_CIRUJANO);
+  const isCirPrincipal=rolEfectivo===ROL_CIR_PRINCIPAL||(isAdmin&&!vistaRol);
+  const isCirujano=rolEfectivo===ROL_CIRUJANO;
+  const isEnfermero=rolEfectivo===ROL_ENFERMERO;
+  const canCreateCx=isAdmin&&!vistaRol||isCirPrincipal;
+  const canSeeFacturacion=isAdmin&&!vistaRol;
+  const canSeePersonal=isAdmin&&!vistaRol;
+  const canSeeHospPublico=isCirPrincipal||isAdmin&&!vistaRol;
 
   const unread=notifs.filter(n=>!n.leida).length;
   const sugPend=sugerencias.filter(s=>s.estado==="pendiente");
   const ayudPend=ayudantias.filter(a=>a.estado==="pendiente");
 
-  // Auth
   useEffect(()=>{const tok=localStorage.getItem("cirmi_token");if(tok)loadPerfil(tok);else setAuthLoading(false);},[]);
   const loadPerfil=async(tok)=>{
     try{
@@ -243,26 +227,17 @@ export default function App(){
   const prevM=(y,m,sY,sM)=>{if(m===0){sY(y-1);sM(11);}else sM(m-1);};
   const nextM=(y,m,sY,sM)=>{if(m===11){sY(y+1);sM(0);}else sM(m+1);};
 
-  // Notificaciones
   const markRead=async(id)=>{try{await dbUpdate("notificaciones",id,{leida:true},session);setNotifs(n=>n.map(x=>x.id===id?{...x,leida:true}:x));}catch{}};
   const markAllRead=async()=>{try{await Promise.all(notifs.filter(n=>!n.leida).map(n=>dbUpdate("notificaciones",n.id,{leida:true},session)));setNotifs(n=>n.map(x=>({...x,leida:true})));}catch{}};
   const createNotif=async(uid,msg)=>{try{await dbInsert("notificaciones",{usuario_id:uid,mensaje:msg},session);}catch{}};
 
-  // Notificar a admin y cirujano responsable
   const notificarAyudantia=async(cx,solicitante)=>{
-    // Notificar admin
     const admins=perfiles.filter(p=>p.rol==="admin"||p.rol_app===ROL_ADMIN);
-    for(const a of admins){
-      if(a.id!==authUser?.id)await createNotif(a.id,`🤝 ${solicitante} se ha apuntado como ayudante en "${cx.tipo}" el ${cx.fecha} (${cx.hospital})`);
-    }
-    // Notificar cirujano responsable
+    for(const a of admins){if(a.id!==authUser?.id)await createNotif(a.id,`🤝 ${solicitante} se ha apuntado como ayudante en "${cx.tipo}" el ${cx.fecha} (${cx.hospital})`);}
     const cirProf=perfiles.find(p=>p.nombre===cx.cirujano);
-    if(cirProf&&cirProf.id!==authUser?.id){
-      await createNotif(cirProf.id,`🤝 ${solicitante} solicita ser tu ayudante en "${cx.tipo}" el ${cx.fecha}`);
-    }
+    if(cirProf&&cirProf.id!==authUser?.id)await createNotif(cirProf.id,`🤝 ${solicitante} solicita ser tu ayudante en "${cx.tipo}" el ${cx.fecha}`);
   };
 
-  // Cirugías CRUD
   const openNewCx=(fecha=selDate)=>{
     if(!canCreateCx){alert("No tienes permisos para crear cirugías.");return;}
     setForm({id:newId(),fecha,hospital:hospNamesNoPublico[0]||"",quirofano:"Q-1",tipo:"",turno:"mañana",cirujano:personal.filter(p=>p.rol_app===ROL_CIR_PRINCIPAL||p.rol==="admin")[0]?.nombre||"",ayudante_requerido:"no",instrumentista_requerido:"no",ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});
@@ -282,9 +257,7 @@ export default function App(){
   const delCx=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("cirugias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
   const updFact=async(id,v)=>{try{await dbUpdate("cirugias",id,{factura:v});setCirugias(p=>p.map(c=>c.id===id?{...c,factura:v}:c));}catch{alert("Error.");}};
 
-  // Guardias CRUD
   const openGuardia=(fecha,hospital)=>{
-    // Check incompatibilidad con Hospital Público
     const hospPubGuardia=guardias.find(g=>g.fecha===fecha&&g.hospital===HOSP_PUBLICO);
     setForm({fecha,hospital,cirujano_principal:"",cirujano_ayudante:"",notas:"",_incompatibilidad:hospPubGuardia?`⚠️ ${hospPubGuardia.cirujano_principal||"Alguien"} tiene guardia en Hospital Público este día`:null,...(guardias.find(g=>g.fecha===fecha&&g.hospital===hospital)||{})});
     setModal("g_edit");
@@ -295,12 +268,16 @@ export default function App(){
     try{
       if(data.id){const{id,...d}=data;await dbUpdate("guardias",id,d);}
       else await dbInsert("guardias",data);
+      // Notificar incompatibilidad al admin
+      if(_incompatibilidad){
+        const admins=perfiles.filter(p=>p.rol==="admin"||p.rol_app===ROL_ADMIN);
+        for(const a of admins){await createNotif(a.id,`⚠️ Guardia asignada en ${data.hospital} el ${data.fecha} con posible incompatibilidad: ${_incompatibilidad}`);}
+      }
       await loadAll();setModal(null);
     }catch{alert("Error.");}finally{setSaving(false);}
   };
   const delGuardia=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("guardias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
 
-  // Sugerencias guardia
   const openSugerencia=()=>{setForm({fecha:todayStr,hospital:hospNames[0]||"",nota:""});setModal("sug_n");};
   const saveSugerencia=async()=>{
     if(!form.fecha||!form.hospital){alert("Selecciona fecha y hospital.");return;}
@@ -322,7 +299,6 @@ export default function App(){
     catch{alert("Error.");}
   };
 
-  // Ayudantías
   const solicitarAyudantia=async(cx,turno)=>{
     const yaSolicite=ayudantias.find(a=>a.cirugia_id===cx.id&&a.usuario_id===authUser?.id);
     if(yaSolicite){alert("Ya has solicitado esta ayudantía.");return;}
@@ -337,11 +313,9 @@ export default function App(){
   const aprobarAyudantia=async(ay)=>{
     try{
       await dbUpdate("ayudantias",ay.id,{estado:"aprobada"});
-      // Actualizar cirugía con el ayudante
       const cx=cirugias.find(c=>c.id===ay.cirugia_id);
       if(cx)await dbUpdate("cirugias",cx.id,{ayudante:ay.cirujano_solicitante});
       await createNotif(ay.usuario_id,`✅ Tu solicitud de ayudantía para "${cirugias.find(c=>c.id===ay.cirugia_id)?.tipo||"cirugía"}" el ${ay.fecha} ha sido APROBADA.`);
-      // Rechazar resto
       const otras=ayudantias.filter(a=>a.cirugia_id===ay.cirugia_id&&a.id!==ay.id&&a.estado==="pendiente");
       for(const o of otras){await dbUpdate("ayudantias",o.id,{estado:"rechazada"});await createNotif(o.usuario_id,`❌ Tu solicitud de ayudantía para el ${o.fecha} no ha sido seleccionada.`);}
       await loadAll();
@@ -352,10 +326,9 @@ export default function App(){
     catch{alert("Error.");}
   };
 
-  // Disponibilidad enfermería
-  const openDisp=(fecha,turno)=>{
+  const openDisp=(fecha)=>{
     const exist=dispEnfermeria.find(d=>d.fecha===fecha&&d.usuario_id===authUser?.id);
-    setForm(exist?{...exist}:{fecha,turno:turno||"mañana",nota:"",usuario_id:authUser?.id,usuario_nombre:perfil?.nombre||perfil?.email});
+    setForm(exist?{...exist}:{fecha,turno:"mañana",nota:"",usuario_id:authUser?.id,usuario_nombre:perfil?.nombre||perfil?.email});
     setModal("disp_edit");
   };
   const saveDisp=async()=>{
@@ -368,7 +341,6 @@ export default function App(){
   };
   const delDisp=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("disponibilidad_enfermeria",id);await loadAll();setModal(null);}catch{alert("Error.");}};
 
-  // Solicitar asignación enfermero a cirugía
   const solicitarAsignacionEnf=async(cx)=>{
     setSaving(true);
     try{
@@ -378,18 +350,15 @@ export default function App(){
     }catch{alert("Error.");}finally{setSaving(false);}
   };
 
-  // Personal CRUD
   const openNewP=()=>{setForm({nombre:"",rol_app:ROL_CIRUJANO,hospitales:[],tel:"",color:COLORES[0],activo:true});setModal("p_n");};
   const saveP=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="p_n")await dbInsert("personal",form);else{const{id,...d}=form;await dbUpdate("personal",id,d);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);}};
   const delP=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbUpdate("personal",id,{activo:false});await loadAll();setModal(null);}catch{alert("Error.");}};
   const togH=(h)=>{const a=form.hospitales||[];setForm({...form,hospitales:a.includes(h)?a.filter(x=>x!==h):[...a,h]});};
 
-  // Hospitales CRUD
   const openNewH=()=>{setForm({nombre:"",direccion:"",activo:true});setModal("h_n");};
   const saveH=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="h_n")await dbInsert("hospitales",form);else{const{id,...d}=form;await dbUpdate("hospitales",id,d);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);}};
   const delH=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbUpdate("hospitales",id,{activo:false});await loadAll();setModal(null);}catch{alert("Error.");}};
 
-  // Documentos
   const openSubirDoc=()=>{setForm({nombre:"",descripcion:"",categoria:"Consentimientos",_file:null});setModal("doc_n");};
   const subirDoc=async()=>{
     if(!form._file||!form.nombre.trim()){alert("Selecciona un archivo y ponle nombre.");return;}
@@ -404,36 +373,28 @@ export default function App(){
   const descargarDoc=async(doc)=>{try{const url=await getSignedUrl(doc.url,session);window.open(url,"_blank");}catch{alert("Error al generar enlace.");}};
   const eliminarDoc=async(doc)=>{if(!confirm("¿Eliminar?"))return;try{await deleteStorageFile(doc.url,session);await dbDelete("documentos",doc.id);await loadAll();}catch{alert("Error.");}};
 
-  // Usuarios admin
-  const aprobarU=async(id,rolApp=ROL_CIRUJANO)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado",rol_app:rolApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+  const aprobarU=async(id,rApp=ROL_CIRUJANO)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado",rol_app:rApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const bloquearU=async(id)=>{if(!confirm("¿Bloquear?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const cambiarRolU=async(id,nuevoRol)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol_app:nuevoRol})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
 
-  // Stats
   const pendFact=cirugias.filter(c=>c.factura==="Pendiente").length;
   const hoyN=cirugias.filter(c=>c.fecha===todayStr).length;
   const mesN=cirugias.filter(c=>{const d=new Date(c.fecha);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear();}).length;
-  const cxDia=cirugias.filter(c=>c.fecha===selDate&&(isAdmin||isCirPrincipal||isCirujano||(isEnfermero)));
-  // Cirugías con ayudante requerido y sin asignar (para ayudantías)
+  const cxDia=cirugias.filter(c=>c.fecha===selDate);
   const cxConAyudante=cirugias.filter(c=>c.ayudante_requerido==="si"||c.ayudante_requerido===true);
 
-  // Tabs según rol
+  // ── TABS según rol efectivo ──
   const TABS=[
-     // Modo vista admin
-  const[vistaRol,setVistaRol]=useState(null);
-  const rolEfectivo=isAdmin&&vistaRol?vistaRol:rolApp;
-  const isCirPrincipalEf=rolEfectivo===ROL_CIR_PRINCIPAL||isAdmin&&!vistaRol;
-  const isCirujanoEf=rolEfectivo===ROL_CIRUJANO;
-  const isEnfermeroEf=rolEfectivo===ROL_ENFERMERO;
-    const TABS=[
     ["agenda","📅","Agenda"],
-    ...(isAdmin||isCirPrincipal||isCirujano?[["guardias","🛡️","Guardias"]]:[] ),
-    ...(isAdmin||isEnfermero?[["disponibilidad","📆","Disponibilidad"]]:[] ),
+    ...(isCirPrincipal||isCirujano?[["guardias","🛡️","Guardias"]]:[] ),
+    ...(isEnfermero?[["disponibilidad","📆","Disponibilidad"]]:[] ),
+    ...(isAdmin&&!vistaRol?[["disponibilidad","📆","Enf. Disp."]]:[] ),
+    ["ayudantias","🤝","Ayudantías"],
     ["hospitales","🏨","Hospitales"],
     ...(canSeePersonal?[["personal","👥","Personal"]]:[] ),
     ["documentos","📁","Documentos"],
     ...(canSeeFacturacion?[["facturacion","💰","Facturación"]]:[] ),
-    ...(isAdmin?[["metricas","📊","Métricas"],["config","⚙️","Config"]]:[] ),
+    ...(isAdmin&&!vistaRol?[["metricas","📊","Métricas"],["config","⚙️","Config"]]:[] ),
   ];
 
   const css=`
@@ -472,7 +433,6 @@ export default function App(){
     @media(max-width:767px){.form-grid{grid-template-columns:1fr!important}.modal{padding:20px;border-radius:14px}}
   `;
 
-  // Auth gates
   if(authLoading)return(<div style={{minHeight:"100vh",background:`linear-gradient(135deg,${B.slateDark},${B.slate})`,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{css}</style><Spin text="Iniciando CIRMI..."/></div>);
   if(!session)return(<><style>{css}</style><AuthScreen onAuth={handleAuth}/></>);
   if(!perfil||perfil.estado==="pendiente")return(<><style>{css}</style><PendingScreen perfil={perfil} onLogout={handleLogout}/></>);
@@ -482,7 +442,7 @@ export default function App(){
     <button key={id} onClick={()=>{setTab(id);setShowNav(false);}}
       style={{display:"flex",flexDirection:mob?"row":"column",alignItems:"center",gap:mob?10:3,padding:mob?"12px 16px":"7px 10px",border:"none",background:tab===id?(mob?`${B.gold}20`:B.gold):"none",color:tab===id?(mob?B.goldDark:B.slateDark):"rgba(255,255,255,.6)",borderRadius:8,transition:"all .15s",width:mob?"100%":"auto",textAlign:mob?"left":"center",cursor:"pointer",fontSize:mob?14:11,fontWeight:tab===id?700:500}}>
       <span style={{fontSize:mob?18:15}}>{icon}</span><span>{label}</span>
-      {id==="ayudantias"&&ayudPend.length>0&&isAdmin&&<span style={{background:"#EF4444",color:"white",borderRadius:10,padding:"0 4px",fontSize:9,fontWeight:700,marginLeft:"auto"}}>{ayudPend.length}</span>}
+      {id==="ayudantias"&&ayudPend.length>0&&isAdmin&&!vistaRol&&<span style={{background:"#EF4444",color:"white",borderRadius:10,padding:"0 4px",fontSize:9,fontWeight:700,marginLeft:"auto"}}>{ayudPend.length}</span>}
     </button>
   );
 
@@ -495,10 +455,19 @@ export default function App(){
         <div style={{maxWidth:1400,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:54}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <svg width="70" height="20" viewBox="0 0 70 20"><text x="0" y="17" fontFamily="Georgia,serif" fontSize="19" fontWeight="700" fill={B.white} letterSpacing="1">CIRMI</text><line x1="3" y1="2" x2="10" y2="18" stroke={B.gold} strokeWidth="1.8" strokeLinecap="round"/></svg>
-            {!mob&&<><div style={{width:1,height:14,background:"rgba(255,255,255,.15)"}}/><span style={{color:"rgba(255,255,255,.35)",fontSize:10}}>{ROLES_LABELS[rolApp]||"Usuario"}</span></>}
+            {!mob&&<><div style={{width:1,height:14,background:"rgba(255,255,255,.15)"}}/><span style={{color:"rgba(255,255,255,.35)",fontSize:10}}>{vistaRol?`Vista: ${ROLES_LABELS[vistaRol]}`:(ROLES_LABELS[perfil?.rol_app]||"Admin")}</span></>}
           </div>
           {!mob&&<div style={{display:"flex",gap:1,overflowX:"auto"}}>{TABS.map(([id,icon,label])=>navBtn(id,icon,label))}</div>}
           <div style={{display:"flex",alignItems:"center",gap:7}}>
+            {/* Selector modo vista — solo admin */}
+            {isAdmin&&!mob&&(
+              <select value={vistaRol} onChange={e=>{setVistaRol(e.target.value);setTab("agenda");}}
+                style={{padding:"4px 8px",borderRadius:7,border:"1.5px solid rgba(255,255,255,.25)",background:vistaRol?"rgba(245,200,66,.2)":"rgba(255,255,255,.1)",color:vistaRol?B.gold:"rgba(255,255,255,.7)",fontSize:11,cursor:"pointer",outline:"none"}}>
+                <option value="">👁 Vista Admin</option>
+                {Object.entries(ROLES_LABELS).filter(([k])=>k!==ROL_ADMIN).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+              </select>
+            )}
+            {/* Notificaciones */}
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowNotifs(!showNotifs)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:15,position:"relative",cursor:"pointer"}}>
                 🔔{unread>0&&<span style={{position:"absolute",top:-3,right:-3,background:"#EF4444",color:"white",borderRadius:10,padding:"0 4px",fontSize:9,fontWeight:700,minWidth:15,textAlign:"center"}}>{unread}</span>}
@@ -523,7 +492,18 @@ export default function App(){
             {mob&&<button onClick={()=>setShowNav(!showNav)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:34,height:34,color:"white",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>☰</button>}
           </div>
         </div>
+        {/* Modo vista banner */}
+        {vistaRol&&<div style={{background:B.goldLight,padding:"4px 18px",textAlign:"center",fontSize:12,color:B.goldDark,fontWeight:600}}>
+          👁 Viendo como: <strong>{ROLES_LABELS[vistaRol]}</strong> — <button onClick={()=>{setVistaRol("");setTab("agenda");}} style={{border:"none",background:"none",color:B.goldDark,cursor:"pointer",fontWeight:700,textDecoration:"underline",fontSize:12}}>Volver a Admin</button>
+        </div>}
         {mob&&showNav&&<div style={{borderTop:`1px solid rgba(255,255,255,.1)`,padding:"6px 0",display:"flex",flexDirection:"column",gap:1,maxHeight:"60vh",overflowY:"auto"}}>
+          {isAdmin&&<div style={{padding:"8px 16px",borderBottom:`1px solid rgba(255,255,255,.1)`}}>
+            <select value={vistaRol} onChange={e=>{setVistaRol(e.target.value);setTab("agenda");setShowNav(false);}}
+              style={{width:"100%",padding:"7px 10px",borderRadius:7,border:"1.5px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",color:"white",fontSize:12}}>
+              <option value="">👁 Vista Admin</option>
+              {Object.entries(ROLES_LABELS).filter(([k])=>k!==ROL_ADMIN).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>}
           {TABS.map(([id,icon,label])=>navBtn(id,icon,label))}
           {canCreateCx&&<button onClick={()=>{openNewCx();setShowNav(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",border:"none",background:"none",color:B.gold,fontSize:14,fontWeight:700,width:"100%",cursor:"pointer"}}>➕ Nueva cirugía</button>}
           <button onClick={handleLogout} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",border:"none",background:"none",color:"rgba(255,255,255,.4)",fontSize:13,width:"100%",cursor:"pointer"}}>🚪 Salir</button>
@@ -532,11 +512,14 @@ export default function App(){
 
       {/* Mobile bottom nav */}
       {mob&&<div style={{position:"fixed",bottom:0,left:0,right:0,background:B.slateDark,zIndex:90,borderTop:`1px solid rgba(255,255,255,.1)`,display:"flex",justifyContent:"space-around",padding:"5px 0 env(safe-area-inset-bottom)"}}>
-        {[["agenda","📅"],["ayudantias","🤝"],["documentos","📁"],...(isAdmin||isCirPrincipal?[["guardias","🛡️"]]:isEnfermero?[["disponibilidad","📆"]]:[] ),...(isAdmin?[["config","⚙️"]]:[] )].map(([id,icon])=>(
+        {[["agenda","📅"],["ayudantias","🤝"],["documentos","📁"],
+          ...(isCirPrincipal||isCirujano?[["guardias","🛡️"]]:isEnfermero?[["disponibilidad","📆"]]:isAdmin&&!vistaRol?[["disponibilidad","📆"],["guardias","🛡️"]]:[] ),
+          ...(isAdmin&&!vistaRol?[["config","⚙️"]]:[] )
+        ].map(([id,icon])=>(
           <button key={id} onClick={()=>setTab(id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"4px 10px",border:"none",background:"none",color:tab===id?B.gold:"rgba(255,255,255,.5)",cursor:"pointer",position:"relative",minWidth:44}}>
             <span style={{fontSize:tab===id?20:17}}>{icon}</span>
             <span style={{fontSize:9,fontWeight:600}}>{{"agenda":"Agenda","ayudantias":"Ayudantías","documentos":"Docs","guardias":"Guardias","disponibilidad":"Disp.","config":"Config"}[id]}</span>
-            {id==="ayudantias"&&ayudPend.length>0&&isAdmin&&<span style={{position:"absolute",top:0,right:4,background:"#EF4444",color:"white",borderRadius:10,padding:"0 3px",fontSize:8,fontWeight:700}}>{ayudPend.length}</span>}
+            {id==="ayudantias"&&ayudPend.length>0&&isAdmin&&!vistaRol&&<span style={{position:"absolute",top:0,right:4,background:"#EF4444",color:"white",borderRadius:10,padding:"0 3px",fontSize:8,fontWeight:700}}>{ayudPend.length}</span>}
           </button>
         ))}
       </div>}
@@ -545,7 +528,12 @@ export default function App(){
 
         {/* STATS */}
         <div style={{display:"grid",gridTemplateColumns:mob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:18}}>
-          {[{label:"Hoy",value:hoyN,icon:"🔪",accent:B.slate},{label:"Este mes",value:mesN,icon:"📅",accent:B.slateLight},...(isAdmin?[{label:"Fact. pend.",value:pendFact,icon:"📋",accent:B.goldDark}]:[]),...(isAdmin?[{label:"Total",value:cirugias.length,icon:"📊",accent:B.slateDark}]:[{label:"Mis ayudantías",value:ayudantias.filter(a=>a.usuario_id===authUser?.id&&a.estado==="aprobada").length,icon:"🤝",accent:B.slateDark}])].map(s=>(
+          {[
+            {label:"Hoy",value:hoyN,icon:"🔪",accent:B.slate},
+            {label:"Este mes",value:mesN,icon:"📅",accent:B.slateLight},
+            ...(canSeeFacturacion?[{label:"Fact. pend.",value:pendFact,icon:"📋",accent:B.goldDark}]:[]),
+            ...(canSeeFacturacion?[{label:"Total",value:cirugias.length,icon:"📊",accent:B.slateDark}]:[{label:"Mis ayudantías",value:ayudantias.filter(a=>a.usuario_id===authUser?.id&&a.estado==="aprobada").length,icon:"🤝",accent:B.slateDark}]),
+          ].map(s=>(
             <div key={s.label} className="stat-card" style={{borderLeft:`4px solid ${s.accent}`}}>
               <div style={{display:"flex",justifyContent:"space-between"}}>
                 <div><div style={{fontSize:mob?20:24,fontWeight:700,color:s.accent,lineHeight:1}}>{s.value}</div><div style={{fontSize:11,color:B.muted,marginTop:3}}>{s.label}</div></div>
@@ -583,10 +571,10 @@ export default function App(){
               </div>
               {cxDia.length===0?<div className="card" style={{padding:28,textAlign:"center",color:B.muted}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Sin cirugías</div>{canCreateCx&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{marginTop:10}}>+ Añadir</button>}</div>
               :cxDia.sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(c=>(
-                <div key={c.id} className="card" style={{padding:"12px 14px",marginBottom:8,cursor:"pointer"}} onClick={()=>{if(canCreateCx){setForm({...c});setModal("cx_e");}}}>
+                <div key={c.id} className="card" style={{padding:"12px 14px",marginBottom:8,cursor:canCreateCx?"pointer":"default"}} onClick={()=>{if(canCreateCx){setForm({...c});setModal("cx_e");}}}>
                   <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
                     <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
                         <span style={{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:600,color:B.slateDark}}>{c.inicio}–{c.fin}</span>
                         <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
                         {c.turno&&<Bdg label={c.turno} bg={B.bg} color={B.muted}/>}
@@ -599,12 +587,11 @@ export default function App(){
                       {c.instrumentista_requerido==="si"&&!c.enfermera&&<div style={{fontSize:11,color:B.goldDark}}>💉 Instrumentista requerida — sin asignar</div>}
                       {c.enfermera&&<div style={{fontSize:12,color:B.muted}}>💉 {c.enfermera}</div>}
                       {c.obs&&<div style={{fontSize:11,color:B.goldDark,marginTop:2}}>⚠ {c.obs}</div>}
-                      {/* Enfermero: solicitar asignación */}
                       {isEnfermero&&c.instrumentista_requerido==="si"&&!c.enfermera&&(
                         <button className="btn-green" style={{marginTop:6,fontSize:11}} onClick={e=>{e.stopPropagation();solicitarAsignacionEnf(c);}}>💉 Solicitar asignación</button>
                       )}
                     </div>
-                    {isAdmin&&<Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/>}
+                    {canSeeFacturacion&&<Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/>}
                   </div>
                 </div>
               ))}
@@ -615,38 +602,26 @@ export default function App(){
           {tab==="ayudantias"&&(
             <div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
-                <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🤝 Ayudantías</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>{isAdmin?"Gestiona las solicitudes de ayudantía":"Cirugías disponibles para ayudar"}</p></div>
+                <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🤝 Ayudantías</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>{isAdmin&&!vistaRol?"Gestiona las solicitudes de ayudantía":"Cirugías disponibles para ayudar"}</p></div>
               </div>
-
-              {/* Admin: solicitudes pendientes */}
-              {isAdmin&&ayudPend.length>0&&(
+              {isAdmin&&!vistaRol&&ayudPend.length>0&&(
                 <div style={{background:"white",borderRadius:13,border:`1.5px solid ${B.gold}`,padding:"14px 16px",marginBottom:16}}>
                   <div style={{fontWeight:700,fontSize:14,color:B.goldDark,marginBottom:10}}>⏳ Solicitudes pendientes ({ayudPend.length})</div>
                   {ayudPend.map(ay=>{
                     const cx=cirugias.find(c=>c.id===ay.cirugia_id);
                     return(<div key={ay.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid ${B.border}`,gap:10,flexWrap:"wrap"}}>
-                      <div>
-                        <div style={{fontWeight:600,fontSize:13}}>{ay.cirujano_solicitante}</div>
-                        <div style={{fontSize:12,color:B.muted}}>{cx?.tipo||"—"} · {ay.fecha} · {ay.hospital}</div>
-                        <div style={{fontSize:11,color:B.muted}}>Turno: {ay.tipo}</div>
-                      </div>
-                      <div style={{display:"flex",gap:6}}>
-                        <button className="btn-green" onClick={()=>aprobarAyudantia(ay)}>✓ Aprobar</button>
-                        <button className="btn-sm-danger" onClick={()=>rechazarAyudantia(ay)}>Rechazar</button>
-                      </div>
+                      <div><div style={{fontWeight:600,fontSize:13}}>{ay.cirujano_solicitante}</div><div style={{fontSize:12,color:B.muted}}>{cx?.tipo||"—"} · {ay.fecha} · {ay.hospital}</div><div style={{fontSize:11,color:B.muted}}>Turno: {ay.tipo}</div></div>
+                      <div style={{display:"flex",gap:6}}><button className="btn-green" onClick={()=>aprobarAyudantia(ay)}>✓ Aprobar</button><button className="btn-sm-danger" onClick={()=>rechazarAyudantia(ay)}>Rechazar</button></div>
                     </div>);
                   })}
                 </div>
               )}
-
-              {/* Calendario de ayudantías */}
               <CalMes year={ayY} month={ayM}
                 onPrev={()=>prevM(ayY,ayM,setAyY,setAyM)}
                 onNext={()=>nextM(ayY,ayM,setAyY,setAyM)}
                 onToday={()=>{setAyY(today.getFullYear());setAyM(today.getMonth());}}
                 renderDay={({day,dateStr,isToday,isWeekend,col})=>{
                   const dcAy=cxConAyudante.filter(c=>c.fecha===dateStr);
-                  const misAy=ayudantias.filter(a=>a.fecha===dateStr&&a.usuario_id===authUser?.id);
                   return(<div key={dateStr} style={{minHeight:76,borderRight:col<6?`1px solid ${B.border}`:"none",borderBottom:`1px solid ${B.border}`,padding:6,background:isToday?B.goldLight:isWeekend?"#FAFBFC":"white",cursor:"default"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
                       <div style={{width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday?B.gold:"transparent",color:isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday?700:400,fontSize:11}}>{day}</div>
@@ -657,17 +632,13 @@ export default function App(){
                       const turno=parseInt(c.inicio)<13?"mañana":"tarde";
                       return(<div key={c.id} style={{background:miSol?.estado==="aprobada"?"#E6F4EC":miSol?.estado==="pendiente"?B.goldLight:"#F0F4F8",borderRadius:4,padding:"2px 4px",marginBottom:2,fontSize:9}}>
                         <div style={{fontWeight:600,color:B.slateDark,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.tipo}</div>
-                        {!miSol&&(isCirujano||isCirPrincipal)&&(
-                          <button onClick={()=>solicitarAyudantia(c,turno)} style={{fontSize:8,background:B.gold,border:"none",borderRadius:3,padding:"1px 4px",cursor:"pointer",fontWeight:700,color:B.slateDark,marginTop:1}}>Apuntarme</button>
-                        )}
+                        {!miSol&&(isCirujano||isCirPrincipal)&&<button onClick={()=>solicitarAyudantia(c,turno)} style={{fontSize:8,background:B.gold,border:"none",borderRadius:3,padding:"1px 4px",cursor:"pointer",fontWeight:700,color:B.slateDark,marginTop:1}}>Apuntarme</button>}
                         {miSol&&<div style={{fontSize:8,fontWeight:600,color:miSol.estado==="aprobada"?"#2E7D52":miSol.estado==="pendiente"?B.goldDark:"#B91C1C"}}>{miSol.estado==="aprobada"?"✓ Asignado":miSol.estado==="pendiente"?"⏳ Pendiente":"✗ No seleccionado"}</div>}
                       </div>);
                     })}
                   </div>);
                 }}
               />
-
-              {/* Lista de cirugías con ayudante requerido */}
               <h3 style={{fontSize:15,fontWeight:700,color:B.slateDark,marginBottom:12}}>Cirugías con ayudante requerido</h3>
               {cxConAyudante.filter(c=>c.fecha>=todayStr).length===0?<div className="card" style={{padding:28,textAlign:"center",color:B.muted}}>No hay cirugías pendientes de ayudante</div>:
               cxConAyudante.filter(c=>c.fecha>=todayStr).sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(c=>{
@@ -686,12 +657,10 @@ export default function App(){
                       <div style={{fontSize:12,color:B.muted}}>{c.hospital} · {c.inicio}–{c.fin}</div>
                       <div style={{fontSize:12,color:B.muted}}>🔪 {c.cirujano}</div>
                       {c.ayudante?<div style={{fontSize:12,color:"#2E7D52",marginTop:2}}>✅ Ayudante: {c.ayudante}</div>:<div style={{fontSize:11,color:B.goldDark}}>Sin ayudante asignado</div>}
-                      {isAdmin&&solicitudes.length>0&&<div style={{fontSize:11,color:B.muted,marginTop:2}}>{solicitudes.length} solicitud{solicitudes.length>1?"es":""}</div>}
+                      {isAdmin&&!vistaRol&&solicitudes.length>0&&<div style={{fontSize:11,color:B.muted,marginTop:2}}>{solicitudes.length} solicitud{solicitudes.length>1?"es":""}</div>}
                     </div>
                     <div>
-                      {(isCirujano||isCirPrincipal)&&!c.ayudante&&!miSol&&(
-                        <button className="btn-green" onClick={()=>solicitarAyudantia(c,turno)} disabled={saving}>🤝 Apuntarme</button>
-                      )}
+                      {(isCirujano||isCirPrincipal)&&!c.ayudante&&!miSol&&<button className="btn-green" onClick={()=>solicitarAyudantia(c,turno)} disabled={saving}>🤝 Apuntarme</button>}
                       {miSol&&<Bdg label={miSol.estado==="aprobada"?"✓ Asignado":miSol.estado==="pendiente"?"⏳ Pendiente":"✗ No seleccionado"} bg={miSol.estado==="aprobada"?"#E6F4EC":miSol.estado==="pendiente"?B.goldLight:"#FEE2E2"} color={miSol.estado==="aprobada"?"#2E7D52":miSol.estado==="pendiente"?B.goldDark:"#DC2626"}/>}
                     </div>
                   </div>
@@ -704,7 +673,7 @@ export default function App(){
           {tab==="guardias"&&(
             <div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
-                <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🛡️ Guardias</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>Asignación mensual por clínica</p></div>
+                <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🛡️ Guardias</h2></div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
                   {hospitales.filter(h=>canSeeHospPublico||h.nombre!==HOSP_PUBLICO).map((h,i)=>(
                     <button key={h.nombre} onClick={()=>setGuardHosp(h.nombre)} style={{padding:"6px 12px",borderRadius:9,border:"1.5px solid",fontSize:12,fontWeight:600,cursor:"pointer",background:guardHosp===h.nombre?ACCENTS[i%ACCENTS.length]:"white",color:guardHosp===h.nombre?"white":B.slate,borderColor:guardHosp===h.nombre?ACCENTS[i%ACCENTS.length]:B.border}}>
@@ -714,16 +683,8 @@ export default function App(){
                   {(isCirPrincipal||isCirujano)&&<button className="btn-gold" onClick={openSugerencia} style={{padding:"6px 12px",fontSize:12}}>+ Sugerir día</button>}
                 </div>
               </div>
-
-              {/* Info Hospital Público */}
-              {guardHosp===HOSP_PUBLICO&&canSeeHospPublico&&(
-                <div style={{background:B.goldLight,border:`1.5px solid ${B.gold}`,borderRadius:11,padding:"12px 14px",marginBottom:14,fontSize:13,color:B.goldDark}}>
-                  🏥 <strong>Hospital Público</strong> — Registra aquí guardias externas e incompatibilidades. Si hay conflicto con otro hospital, se mostrará un aviso.
-                </div>
-              )}
-
-              {/* Solicitudes pendientes admin */}
-              {isAdmin&&sugPend.length>0&&(
+              {guardHosp===HOSP_PUBLICO&&<div style={{background:B.goldLight,border:`1.5px solid ${B.gold}`,borderRadius:11,padding:"11px 13px",marginBottom:13,fontSize:13,color:B.goldDark}}>🏥 <strong>Hospital Público</strong> — Registra guardias externas e incompatibilidades personales.</div>}
+              {isAdmin&&!vistaRol&&sugPend.length>0&&(
                 <div style={{background:"white",borderRadius:13,border:`1.5px solid ${B.gold}`,padding:"13px 15px",marginBottom:14}}>
                   <div style={{fontWeight:700,fontSize:13,color:B.goldDark,marginBottom:8}}>⏳ Sugerencias pendientes ({sugPend.length})</div>
                   {sugPend.map(s=>(<div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${B.border}`,gap:8,flexWrap:"wrap"}}>
@@ -732,17 +693,15 @@ export default function App(){
                   </div>))}
                 </div>
               )}
-
               <CalMes year={gY} month={gM}
                 onPrev={()=>prevM(gY,gM,setGY,setGM)}
                 onNext={()=>nextM(gY,gM,setGY,setGM)}
                 onToday={()=>{setGY(today.getFullYear());setGM(today.getMonth());}}
                 renderDay={({day,dateStr,isToday,isWeekend,col})=>{
                   const g=guardias.find(x=>x.fecha===dateStr&&x.hospital===guardHosp);
-                  // Check incompatibilidad con Hospital Público
                   const hospPubG=guardHosp!==HOSP_PUBLICO?guardias.find(x=>x.fecha===dateStr&&x.hospital===HOSP_PUBLICO):null;
                   const hasIncompat=hospPubG&&g;
-                  return(<div key={dateStr} style={{minHeight:72,borderRight:col<6?`1px solid ${B.border}`:"none",borderBottom:`1px solid ${B.border}`,padding:5,background:hasIncompat?"#FFF7ED":isToday?B.goldLight:g?"#E6F4EC":isWeekend?"#FAFBFC":"white",cursor:(isAdmin||isCirPrincipal)?"pointer":"default"}} onClick={()=>(isAdmin||isCirPrincipal)&&openGuardia(dateStr,guardHosp||hospNames[0])}>
+                  return(<div key={dateStr} style={{minHeight:72,borderRight:col<6?`1px solid ${B.border}`:"none",borderBottom:`1px solid ${B.border}`,padding:5,background:hasIncompat?"#FFF7ED":isToday?B.goldLight:g?"#E6F4EC":isWeekend?"#FAFBFC":"white",cursor:(isCirPrincipal&&!isCirujano)?"pointer":"default"}} onClick={()=>isCirPrincipal&&!isCirujano&&openGuardia(dateStr,guardHosp||hospNames[0])}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
                       <div style={{width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday?B.gold:"transparent",color:isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday?700:400,fontSize:11}}>{day}</div>
                       {hasIncompat&&<span style={{fontSize:9}}>⚠️</span>}
@@ -752,7 +711,7 @@ export default function App(){
                       {g.cirujano_principal&&<div style={{fontWeight:700,color:"#2E7D52",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🔪 {g.cirujano_principal.split(" ").slice(-1)[0]}</div>}
                       {g.cirujano_ayudante&&<div style={{color:B.slate,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🤝 {g.cirujano_ayudante.split(" ").slice(-1)[0]}</div>}
                     </div>}
-                    {!g&&(isAdmin||isCirPrincipal)&&<div style={{fontSize:8,color:B.border,textAlign:"center",paddingTop:2}}>+ asignar</div>}
+                    {!g&&isCirPrincipal&&!isCirujano&&<div style={{fontSize:8,color:B.border,textAlign:"center",paddingTop:2}}>+ asignar</div>}
                   </div>);
                 }}
               />
@@ -762,21 +721,27 @@ export default function App(){
           {/* ══ DISPONIBILIDAD ENFERMERÍA ══ */}
           {tab==="disponibilidad"&&(isEnfermero||isAdmin)&&(
             <div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-                <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>📆 Mi Disponibilidad</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>Solo visible para ti y el administrador</p></div>
+              <div style={{marginBottom:14}}>
+                <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>📆 {isAdmin&&!vistaRol?"Disponibilidad Enfermería":"Mi Disponibilidad"}</h2>
+                <p style={{color:B.muted,fontSize:13,marginTop:2}}>{isAdmin&&!vistaRol?"Vista global de disponibilidad del equipo de enfermería":"Solo visible para ti y el administrador"}</p>
               </div>
+              {isAdmin&&!vistaRol&&(
+                <div style={{marginBottom:14,padding:"10px 14px",background:B.bg,borderRadius:10,fontSize:12,color:B.muted}}>
+                  Colores: <span style={{color:"#1D4ED8",fontWeight:600}}>Mañana</span> · <span style={{color:"#C2410C",fontWeight:600}}>Tarde</span> · <span style={{color:"#2E7D52",fontWeight:600}}>Todo el día</span> · <span style={{color:"#B91C1C",fontWeight:600}}>No disponible</span>
+                </div>
+              )}
               <CalMes year={dispY} month={dispM}
                 onPrev={()=>prevM(dispY,dispM,setDispY,setDispM)}
                 onNext={()=>nextM(dispY,dispM,setDispY,setDispM)}
                 onToday={()=>{setDispY(today.getFullYear());setDispM(today.getMonth());}}
                 renderDay={({day,dateStr,isToday,isWeekend,col})=>{
-                  const miDisp=dispEnfermeria.filter(d=>d.fecha===dateStr&&(isAdmin?true:d.usuario_id===authUser?.id));
+                  const miDisp=dispEnfermeria.filter(d=>d.fecha===dateStr&&(isAdmin&&!vistaRol?true:d.usuario_id===authUser?.id));
                   const colores={"mañana":"#EFF6FF","tarde":"#FFF7ED","todo el día":"#E6F4EC","no disponible":"#FEE2E2"};
                   const colText={"mañana":"#1D4ED8","tarde":"#C2410C","todo el día":"#2E7D52","no disponible":"#B91C1C"};
-                  return(<div key={dateStr} style={{minHeight:76,borderRight:col<6?`1px solid ${B.border}`:"none",borderBottom:`1px solid ${B.border}`,padding:5,background:isToday?B.goldLight:isWeekend?"#FAFBFC":"white",cursor:"pointer"}} onClick={()=>!isAdmin&&openDisp(dateStr,null)}>
+                  return(<div key={dateStr} style={{minHeight:76,borderRight:col<6?`1px solid ${B.border}`:"none",borderBottom:`1px solid ${B.border}`,padding:5,background:isToday?B.goldLight:isWeekend?"#FAFBFC":"white",cursor:isEnfermero?"pointer":"default"}} onClick={()=>isEnfermero&&openDisp(dateStr)}>
                     <div style={{width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday?B.gold:"transparent",color:isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday?700:400,fontSize:11,marginBottom:3}}>{day}</div>
-                    {miDisp.map(d=><div key={d.id} style={{background:colores[d.turno]||B.bg,borderRadius:3,padding:"1px 4px",marginBottom:1,fontSize:9,fontWeight:600,color:colText[d.turno]||B.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{isAdmin?`${d.usuario_nombre?.split(" ")[0]}: ${d.turno}`:d.turno}</div>)}
-                    {miDisp.length===0&&!isAdmin&&<div style={{fontSize:8,color:B.border,textAlign:"center",paddingTop:3}}>+ marcar</div>}
+                    {miDisp.map(d=><div key={d.id} style={{background:colores[d.turno]||B.bg,borderRadius:3,padding:"1px 4px",marginBottom:1,fontSize:9,fontWeight:600,color:colText[d.turno]||B.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{isAdmin&&!vistaRol?`${d.usuario_nombre?.split(" ")[0]}: ${d.turno}`:d.turno}</div>)}
+                    {miDisp.length===0&&isEnfermero&&<div style={{fontSize:8,color:B.border,textAlign:"center",paddingTop:3}}>+ marcar</div>}
                   </div>);
                 }}
               />
@@ -815,7 +780,7 @@ export default function App(){
             </div>
           )}
 
-          {/* ══ PERSONAL (solo admin) ══ */}
+          {/* ══ PERSONAL ══ */}
           {tab==="personal"&&canSeePersonal&&(
             <div>
               <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:14}}>👥 Personal</h2>
@@ -844,13 +809,13 @@ export default function App(){
           {tab==="documentos"&&(
             <div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
-                <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>📁 Repositorio</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>Documentos y formularios del equipo</p></div>
+                <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>📁 Repositorio</h2></div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                   <select className="inp" style={{width:mob?"100%":155}} value={filtCat} onChange={e=>setFiltCat(e.target.value)}><option value="Todos">Todas las categorías</option>{CAT_DOCS.map(c=><option key={c}>{c}</option>)}</select>
-                  {isAdmin&&<button className="btn-gold" onClick={openSubirDoc} style={{padding:"7px 13px",fontSize:12}}>+ Subir</button>}
+                  {isAdmin&&!vistaRol&&<button className="btn-gold" onClick={openSubirDoc} style={{padding:"7px 13px",fontSize:12}}>+ Subir</button>}
                 </div>
               </div>
-              {documentos.filter(d=>filtCat==="Todos"||d.categoria===filtCat).length===0?<div className="card" style={{padding:36,textAlign:"center",color:B.muted}}><div style={{fontSize:36,marginBottom:10}}>📁</div><div style={{fontWeight:600}}>No hay documentos aún</div>{isAdmin&&<button className="btn-gold" onClick={openSubirDoc} style={{marginTop:12}}>+ Subir</button>}</div>:(
+              {documentos.filter(d=>filtCat==="Todos"||d.categoria===filtCat).length===0?<div className="card" style={{padding:36,textAlign:"center",color:B.muted}}><div style={{fontSize:36,marginBottom:10}}>📁</div><div style={{fontWeight:600}}>No hay documentos aún</div>{isAdmin&&!vistaRol&&<button className="btn-gold" onClick={openSubirDoc} style={{marginTop:12}}>+ Subir</button>}</div>:(
                 CAT_DOCS.filter(cat=>filtCat==="Todos"||filtCat===cat).map(cat=>{
                   const docs=documentos.filter(d=>d.categoria===cat&&(filtCat==="Todos"||d.categoria===filtCat));
                   if(docs.length===0)return null;
@@ -864,7 +829,7 @@ export default function App(){
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:4}}>
                           <button className="btn-green" onClick={()=>descargarDoc(doc)} style={{fontSize:11,padding:"4px 8px"}}>⬇ Abrir</button>
-                          {isAdmin&&<button className="btn-sm-danger" onClick={()=>eliminarDoc(doc)}>🗑</button>}
+                          {isAdmin&&!vistaRol&&<button className="btn-sm-danger" onClick={()=>eliminarDoc(doc)}>🗑</button>}
                         </div>
                       </div>)}
                     </div>
@@ -874,7 +839,7 @@ export default function App(){
             </div>
           )}
 
-          {/* ══ FACTURACIÓN (solo admin) ══ */}
+          {/* ══ FACTURACIÓN ══ */}
           {tab==="facturacion"&&canSeeFacturacion&&(
             <div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
@@ -896,39 +861,26 @@ export default function App(){
             </div>
           )}
 
-          {/* ══ MÉTRICAS (solo admin) ══ */}
-          {tab==="metricas"&&isAdmin&&(
+          {/* ══ MÉTRICAS ══ */}
+          {tab==="metricas"&&isAdmin&&!vistaRol&&(
             <div>
               <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:16}}>📊 Métricas</h2>
               <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:20}}>
-                {/* Por hospital */}
                 <div className="card" style={{padding:18}}>
-                  <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:12}}>🏥 Cirugías por hospital</div>
-                  {hospitales.map((h,i)=>{const n=cirugias.filter(c=>c.hospital===h.nombre).length;const pct=cirugias.length>0?Math.round(n/cirugias.length*100):0;return(<div key={h.id} style={{marginBottom:10}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:500}}>{h.nombre}</span><span style={{fontSize:13,fontWeight:700,color:ACCENTS[i%ACCENTS.length]}}>{n}</span></div>
-                    <div style={{height:6,background:B.bg,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",background:ACCENTS[i%ACCENTS.length],borderRadius:3,width:`${pct}%`,transition:"width .3s"}}/></div>
-                  </div>);})}
+                  <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:12}}>🏥 Por hospital</div>
+                  {hospitales.map((h,i)=>{const n=cirugias.filter(c=>c.hospital===h.nombre).length;const pct=cirugias.length>0?Math.round(n/cirugias.length*100):0;return(<div key={h.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:500}}>{h.nombre}</span><span style={{fontSize:13,fontWeight:700,color:ACCENTS[i%ACCENTS.length]}}>{n}</span></div><div style={{height:6,background:B.bg,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",background:ACCENTS[i%ACCENTS.length],borderRadius:3,width:`${pct}%`,transition:"width .3s"}}/></div></div>);})}
                 </div>
-                {/* Por cirujano */}
                 <div className="card" style={{padding:18}}>
-                  <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:12}}>👨‍⚕️ Cirugías por cirujano</div>
-                  {personal.filter(p=>p.rol_app===ROL_CIR_PRINCIPAL).map(p=>{const n=cirugias.filter(c=>c.cirujano===p.nombre).length;const pct=cirugias.length>0?Math.round(n/cirugias.length*100):0;return(<div key={p.id} style={{marginBottom:10}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:500}}>{p.nombre}</span><span style={{fontSize:13,fontWeight:700,color:p.color||B.slate}}>{n}</span></div>
-                    <div style={{height:6,background:B.bg,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",background:p.color||B.slate,borderRadius:3,width:`${pct}%`,transition:"width .3s"}}/></div>
-                  </div>);})}
+                  <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:12}}>👨‍⚕️ Por cirujano</div>
+                  {personal.filter(p=>p.rol_app===ROL_CIR_PRINCIPAL).map(p=>{const n=cirugias.filter(c=>c.cirujano===p.nombre).length;const pct=cirugias.length>0?Math.round(n/cirugias.length*100):0;return(<div key={p.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:500}}>{p.nombre}</span><span style={{fontSize:13,fontWeight:700,color:p.color||B.slate}}>{n}</span></div><div style={{height:6,background:B.bg,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",background:p.color||B.slate,borderRadius:3,width:`${pct}%`,transition:"width .3s"}}/></div></div>);})}
                 </div>
-                {/* Facturación */}
                 <div className="card" style={{padding:18}}>
-                  <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:12}}>💰 Estado facturación</div>
-                  {ESTADOS_FA.map(e=>{const n=cirugias.filter(c=>c.factura===e).length;const pct=cirugias.length>0?Math.round(n/cirugias.length*100):0;return(<div key={e} style={{marginBottom:10}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:500}}>{e}</span><span style={{fontSize:13,fontWeight:700,color:cFact(e)}}>{n}</span></div>
-                    <div style={{height:6,background:B.bg,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",background:cFact(e),borderRadius:3,width:`${pct}%`,transition:"width .3s"}}/></div>
-                  </div>);})}
+                  <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:12}}>💰 Facturación</div>
+                  {ESTADOS_FA.map(e=>{const n=cirugias.filter(c=>c.factura===e).length;const pct=cirugias.length>0?Math.round(n/cirugias.length*100):0;return(<div key={e} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:500}}>{e}</span><span style={{fontSize:13,fontWeight:700,color:cFact(e)}}>{n}</span></div><div style={{height:6,background:B.bg,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",background:cFact(e),borderRadius:3,width:`${pct}%`,transition:"width .3s"}}/></div></div>);})}
                 </div>
               </div>
-              {/* Por mes */}
               <div className="card" style={{padding:18}}>
-                <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:14}}>📅 Cirugías por mes (año {today.getFullYear()})</div>
+                <div style={{fontWeight:700,fontSize:14,color:B.slateDark,marginBottom:14}}>📅 Por mes ({today.getFullYear()})</div>
                 <div style={{display:"flex",gap:6,alignItems:"flex-end",height:100}}>
                   {MESES.map((mes,i)=>{
                     const n=cirugias.filter(c=>{const d=new Date(c.fecha);return d.getMonth()===i&&d.getFullYear()===today.getFullYear();}).length;
@@ -945,14 +897,13 @@ export default function App(){
             </div>
           )}
 
-          {/* ══ CONFIGURACIÓN (solo admin) ══ */}
-          {tab==="config"&&isAdmin&&(
+          {/* ══ CONFIGURACIÓN ══ */}
+          {tab==="config"&&isAdmin&&!vistaRol&&(
             <div>
               <div style={{marginBottom:14}}><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>⚙️ Configuración</h2><p style={{color:B.muted,fontSize:12,marginTop:2}}>Solo visible para administradores</p></div>
               <div style={{display:"flex",gap:2,marginBottom:16,borderBottom:`2px solid ${B.border}`,overflowX:"auto"}}>
                 {[["personal","👥 Personal"],["hospitales","🏨 Hospitales"],["usuarios","🔐 Usuarios"]].map(([id,l])=><button key={id} className={`subtab ${configTab===id?"active":""}`} onClick={()=>setConfigTab(id)}>{l}</button>)}
               </div>
-
               {configTab==="personal"&&(<div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div style={{fontSize:13,fontWeight:600}}>{personal.length} profesionales</div><button className="btn-gold" onClick={openNewP}>+ Añadir</button></div>
                 {personal.map(p=><div key={p.id} className="config-item">
@@ -963,7 +914,6 @@ export default function App(){
                   <button className="btn-sec" style={{padding:"4px 8px",fontSize:11}} onClick={()=>{setForm({...p});setModal("p_e");}}>✏️</button>
                 </div>)}
               </div>)}
-
               {configTab==="hospitales"&&(<div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div style={{fontSize:13,fontWeight:600}}>{hospitales.length} hospitales</div><button className="btn-gold" onClick={openNewH}>+ Añadir</button></div>
                 {hospitales.map((h,idx)=><div key={h.id} className="config-item">
@@ -974,7 +924,6 @@ export default function App(){
                   <button className="btn-sec" style={{padding:"4px 8px",fontSize:11}} onClick={()=>{setForm({...h});setModal("h_e");}}>✏️</button>
                 </div>)}
               </div>)}
-
               {configTab==="usuarios"&&(<div>
                 <div style={{fontSize:12,color:B.muted,marginBottom:12}}>Gestiona el acceso y rol de cada miembro.</div>
                 {["pendiente","aprobado","bloqueado"].map(estado=>{
@@ -1034,40 +983,30 @@ export default function App(){
                 ].map(([l,f])=><FG key={l} label={l}>{f}</FG>)}
               </div>
               <FG label="Tipo de cirugía" style={{marginTop:13}}><input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/></FG>
-
-              {/* Ayudante SI/NO — obligatorio */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:13,marginTop:13}}>
-                <FG label="¿Se requiere ayudante? *">
-                  <div className="toggle-btn">
-                    {["si","no"].map(v=><button key={v} className={`toggle-opt ${form.ayudante_requerido===v?"active":""}`} onClick={()=>setForm({...form,ayudante_requerido:v})}>{v==="si"?"✓ Sí":"✗ No"}</button>)}
-                  </div>
+                <FG label="¿Ayudante? *">
+                  <div className="toggle-btn">{["si","no"].map(v=><button key={v} className={`toggle-opt ${form.ayudante_requerido===v?"active":""}`} onClick={()=>setForm({...form,ayudante_requerido:v})}>{v==="si"?"✓ Sí":"✗ No"}</button>)}</div>
                 </FG>
-                <FG label="¿Se requiere instrumentista? *">
-                  <div className="toggle-btn">
-                    {["si","no"].map(v=><button key={v} className={`toggle-opt ${form.instrumentista_requerido===v?"active":""}`} onClick={()=>setForm({...form,instrumentista_requerido:v})}>{v==="si"?"✓ Sí":"✗ No"}</button>)}
-                  </div>
+                <FG label="¿Instrumentista? *">
+                  <div className="toggle-btn">{["si","no"].map(v=><button key={v} className={`toggle-opt ${form.instrumentista_requerido===v?"active":""}`} onClick={()=>setForm({...form,instrumentista_requerido:v})}>{v==="si"?"✓ Sí":"✗ No"}</button>)}</div>
                 </FG>
               </div>
-
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:13,marginTop:13}}>
                 <FG label="Cirujano principal">
                   <select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>
                     {personal.filter(p=>p.rol_app===ROL_CIR_PRINCIPAL||p.rol==="admin").map(p=><option key={p.id}>{p.nombre}</option>)}
                   </select>
                 </FG>
-                {form.ayudante_requerido==="si"&&<FG label="Ayudante (si ya conocido)"><select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}><option value="">— Pendiente —</option>{personal.filter(p=>p.rol_app===ROL_CIR_PRINCIPAL||p.rol_app===ROL_CIRUJANO||p.rol==="admin").map(p=><option key={p.id}>{p.nombre}</option>)}</select></FG>}
-                {form.instrumentista_requerido==="si"&&<FG label="Instrumentista (si ya conocida)"><select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}><option value="">— Pendiente —</option>{personal.filter(p=>p.rol_app===ROL_ENFERMERO).map(p=><option key={p.id}>{p.nombre}</option>)}</select></FG>}
+                {form.ayudante_requerido==="si"&&<FG label="Ayudante"><select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}><option value="">— Pendiente —</option>{personal.filter(p=>p.rol_app===ROL_CIR_PRINCIPAL||p.rol_app===ROL_CIRUJANO||p.rol==="admin").map(p=><option key={p.id}>{p.nombre}</option>)}</select></FG>}
+                {form.instrumentista_requerido==="si"&&<FG label="Instrumentista"><select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}><option value="">— Pendiente —</option>{personal.filter(p=>p.rol_app===ROL_ENFERMERO).map(p=><option key={p.id}>{p.nombre}</option>)}</select></FG>}
               </div>
-
-              {/* Campo paciente con aviso */}
               <FG label="Código paciente" style={{marginTop:13}}>
                 <input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="Ej: J.G.R. · HC-4521"/>
-                <div style={{fontSize:10,color:B.goldDark,marginTop:4,display:"flex",alignItems:"center",gap:4}}><span>⚠️</span><span>Solo iniciales e número de historia clínica. No introducir nombres completos ni datos identificativos.</span></div>
+                <div style={{fontSize:10,color:B.goldDark,marginTop:4}}>⚠️ Solo iniciales y número de historia clínica. No introducir datos identificativos.</div>
               </FG>
-
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:13,marginTop:13}}>
                 <FG label="Estado"><select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select></FG>
-                {isAdmin&&<FG label="Factura"><select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select></FG>}
+                {canSeeFacturacion&&<FG label="Factura"><select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select></FG>}
               </div>
               <FG label="Observaciones" style={{marginTop:13}}><textarea className="inp" rows={2} value={form.obs||""} onChange={e=>setForm({...form,obs:e.target.value})} placeholder="Notas..." style={{resize:"vertical"}}/></FG>
               <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"space-between"}}>
@@ -1097,7 +1036,7 @@ export default function App(){
             {/* Sugerencia guardia */}
             {modal==="sug_n"&&(<>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <div><h3 style={{fontSize:17,fontWeight:700,color:B.slateDark}}>📅 Sugerir guardia</h3><p style={{fontSize:12,color:B.muted,marginTop:2}}>El administrador confirmará tu propuesta.</p></div>
+                <div><h3 style={{fontSize:17,fontWeight:700,color:B.slateDark}}>📅 Sugerir guardia</h3></div>
                 <button onClick={()=>setModal(null)} style={{border:"none",background:B.bg,borderRadius:7,width:27,height:27,fontSize:15,color:B.muted,cursor:"pointer"}}>×</button>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:13}}>
@@ -1128,7 +1067,7 @@ export default function App(){
                 <FG label="Nota (opcional)"><input className="inp" value={form.nota||""} onChange={e=>setForm({...form,nota:e.target.value})} placeholder="Ej: Solo por la mañana"/></FG>
               </div>
               <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"space-between"}}>
-                <div>{form.id&&<button className="btn-danger" onClick={()=>delDisp(form.id)}>🗑 Eliminar</button>}</div>
+                <div>{form.id&&<button className="btn-danger" onClick={()=>delDisp(form.id)}>🗑</button>}</div>
                 <div style={{display:"flex",gap:10}}><button className="btn-sec" onClick={()=>setModal(null)}>Cancelar</button><button className="btn-gold" onClick={saveDisp} disabled={saving}>{saving?"Guardando...":"Guardar"}</button></div>
               </div>
             </>)}
@@ -1136,7 +1075,7 @@ export default function App(){
             {/* Subir documento */}
             {modal==="doc_n"&&(<>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <div><h3 style={{fontSize:17,fontWeight:700,color:B.slateDark}}>📁 Subir documento</h3><p style={{fontSize:11,color:B.muted,marginTop:2}}>PDF, Word — máx. 10MB recomendado</p></div>
+                <div><h3 style={{fontSize:17,fontWeight:700,color:B.slateDark}}>📁 Subir documento</h3></div>
                 <button onClick={()=>setModal(null)} style={{border:"none",background:B.bg,borderRadius:7,width:27,height:27,fontSize:15,color:B.muted,cursor:"pointer"}}>×</button>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:13}}>
@@ -1201,3 +1140,5 @@ export default function App(){
     </div>
   );
 }
+
+    

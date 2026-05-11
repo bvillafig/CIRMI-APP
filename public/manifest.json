@@ -1,20 +1,24 @@
-json{
+{
   "short_name": "CIRMI",
   "name": "CIRMI - Gestión Quirúrgica",
   "icons": [
     {
-      "src": "logo192.png",
+      "src": "/logo192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "logo512.png",
+      "src": "/logo512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "theme_color": "#2E3F52",
   "background_color": "#2E3F52"
 }

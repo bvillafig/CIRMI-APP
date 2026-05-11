@@ -419,9 +419,16 @@ export default function App(){
 
   // Tabs según rol
   const TABS=[
+     // Modo vista admin
+  const[vistaRol,setVistaRol]=useState(null);
+  const rolEfectivo=isAdmin&&vistaRol?vistaRol:rolApp;
+  const isCirPrincipalEf=rolEfectivo===ROL_CIR_PRINCIPAL||isAdmin&&!vistaRol;
+  const isCirujanoEf=rolEfectivo===ROL_CIRUJANO;
+  const isEnfermeroEf=rolEfectivo===ROL_ENFERMERO;
+    const TABS=[
     ["agenda","📅","Agenda"],
-    ...(isCirPrincipal||isAdmin?[["guardias","🛡️","Guardias"]]:isCirujano?[["guardias","🛡️","Guardias"]]:isEnfermero?[["disponibilidad","📆","Disponibilidad"]]:[] ),
-    ["ayudantias","🤝","Ayudantías"],
+    ...(isAdmin||isCirPrincipal||isCirujano?[["guardias","🛡️","Guardias"]]:[] ),
+    ...(isAdmin||isEnfermero?[["disponibilidad","📆","Disponibilidad"]]:[] ),
     ["hospitales","🏨","Hospitales"],
     ...(canSeePersonal?[["personal","👥","Personal"]]:[] ),
     ["documentos","📁","Documentos"],

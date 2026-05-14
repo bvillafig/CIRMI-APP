@@ -36,7 +36,11 @@ const deleteStorageFile = async (path,tok) => {
 // ─── BRAND ────────────────────────────────────────────────────
 const B={slate:"#4A6079",slateDark:"#2E3F52",slateLight:"#6B8299",gold:"#F5C842",goldLight:"#FDF3C0",goldDark:"#D4A820",bg:"#F2F5F8",white:"#FFFFFF",text:"#1C2B3A",muted:"#7A90A4",border:"#DDE4EB"};
 const ACCENTS=[B.slate,B.slateDark,B.slateLight,"#3D6B8C","#6B4F9A","#2E7D52"];
-const ROLES_P=["Cirujano Principal","Cirujano Residente","Enf. Instrumentista","Anestesista","Otro"];
+const ROL_ADMIN="admin";
+const ROL_CIR_PRINCIPAL="cirujano_principal";
+const ROL_CIRUJANO="cirujano";
+const ROL_ENFERMERO="enfermero";
+const ROLES_P=["Cirujano Principal","Cirujano","Enf. Instrumentista"];
 const COLORES=["#4A6079","#2E3F52","#6B8299","#D4A820","#8B6914","#3D6B8C","#6B4F9A","#2E7D52","#B91C1C","#1D6FA4"];
 const ESTADOS_CX=["Confirmada","Pendiente","Realizada","Cancelada"];
 const ESTADOS_FA=["Pendiente","Facturada","En revisión","Cobrada"];
@@ -180,7 +184,12 @@ export default function App(){
   const[uploading,setUploading]=useState(false);
   const fileRef=useRef();
 
-  const isAdmin=perfil?.rol==="admin";
+  const isAdmin=perfil?.rol===ROL_ADMIN||perfil?.rol_app===ROL_ADMIN;
+  const isCirPrincipal=perfil?.rol_app===ROL_CIR_PRINCIPAL;
+  const isCirujano=perfil?.rol_app===ROL_CIRUJANO;
+  const isEnfermero=perfil?.rol_app===ROL_ENFERMERO;
+  const canCreate=isAdmin||isCirPrincipal;
+  const canSugerirGuardia=isCirPrincipal||isCirujano;
   const unread=notifs.filter(n=>!n.leida).length;
 
   // ── Auth ──
@@ -286,7 +295,7 @@ export default function App(){
   };
 
   // ── Personal ──
-  const openNewP=()=>{setForm({nombre:"",rol:"Cirujano Residente",hospitales:[],tel:"",color:COLORES[0],activo:true});setModal("p_n");};
+  const openNewP=()=>{setForm({nombre:"",rol:"Cirujano",hospitales:[],tel:"",color:COLORES[0],activo:true});setModal("p_n");};
   const saveP=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="p_n")await dbInsert("personal",form);else{const{id,...d}=form;await dbUpdate("personal",id,d);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);};};
   const delP=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbUpdate("personal",id,{activo:false});await loadAll();setModal(null);}catch{alert("Error.");}};
   const togH=(h)=>{const a=form.hospitales||[];setForm({...form,hospitales:a.includes(h)?a.filter(x=>x!==h):[...a,h]});};
@@ -299,7 +308,7 @@ export default function App(){
   // ── Usuarios (admin) ──
   const aprobarU=async(id)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const bloquearU=async(id)=>{if(!confirm("¿Bloquear?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
-  const hacerAdmin=async(id)=>{if(!confirm("¿Dar permisos de admin?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol:"admin"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+  const hacerAdmin=async(id)=>{if(!confirm("¿Dar permisos de admin?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol:"admin",rol_app:"admin"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
 
   // ── Stats ──
   const pendFact=cirugias.filter(c=>c.factura==="Pendiente").length;
@@ -318,8 +327,7 @@ export default function App(){
     ["hospitales","🏨","Hospitales"],
     ["personal","👥","Personal"],
     ["documentos","📁","Documentos"],
-    ["facturacion","💰","Facturación"],
-    ...(isAdmin?[["config","⚙️","Config"]]:[]),
+    ...(isAdmin?[["facturacion","💰","Facturación"],["config","⚙️","Config"]]:[]),
   ];
 
   // ── CSS ──
@@ -426,14 +434,14 @@ export default function App(){
                 </div>
               )}
             </div>
-            {pendFact>0&&!mob&&<div onClick={()=>{setTab("facturacion");setFiltFact("Pendiente");}} style={{background:B.goldLight,color:B.goldDark,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",border:`1px solid ${B.gold}`}}>⚠ {pendFact}</div>}
+            {pendFact>0&&!mob&&isAdmin&&<div onClick={()=>{setTab("facturacion");setFiltFact("Pendiente");}} style={{background:B.goldLight,color:B.goldDark,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",border:`1px solid ${B.gold}`}}>⚠ {pendFact}</div>}
             {/* User */}
             {!mob&&<div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.1)",borderRadius:20,padding:"3px 10px 3px 5px"}}>
               <div className="avatar" style={{background:isAdmin?B.gold:B.slateLight,width:22,height:22,fontSize:9,color:isAdmin?B.slateDark:"white"}}>{(perfil?.nombre||perfil?.email||"?")[0].toUpperCase()}</div>
               <span style={{color:"white",fontSize:11,fontWeight:500}}>{perfil?.nombre?.split(" ")[0]||perfil?.email}</span>
               {isAdmin&&<span style={{background:B.gold,color:B.slateDark,borderRadius:8,padding:"1px 5px",fontSize:9,fontWeight:700}}>ADMIN</span>}
             </div>}
-            <button onClick={()=>openNewCx()} className="btn-gold" style={{padding:"6px 12px",fontSize:12}}>+ Nueva</button>
+            {canCreate&&<button onClick={()=>openNewCx()} className="btn-gold" style={{padding:"6px 12px",fontSize:12}}>+ Nueva</button>}
             {mob&&<button onClick={()=>setShowNav(!showNav)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:36,height:36,color:"white",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>☰</button>}
             {!mob&&<button onClick={handleLogout} className="btn-sec" style={{padding:"4px 10px",fontSize:11}}>Salir</button>}
           </div>
@@ -453,7 +461,7 @@ export default function App(){
       {/* Mobile bottom tab bar */}
       {mob&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:B.slateDark,zIndex:90,borderTop:`1px solid rgba(255,255,255,.1)`,display:"flex",justifyContent:"space-around",padding:"6px 0 env(safe-area-inset-bottom)"}}>
-          {[["agenda","📅"],["guardias","🛡️"],["documentos","📁"],["facturacion","💰"],["config","⚙️"]].filter(([id])=>id!=="config"||isAdmin).map(([id,icon])=>(
+          {[["agenda","📅"],["guardias","🛡️"],["documentos","📁"],["facturacion","💰"],["config","⚙️"]].filter(([id])=>(id!=="config"&&id!=="facturacion")||isAdmin).map(([id,icon])=>(
             <button key={id} onClick={()=>setTab(id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"4px 12px",border:"none",background:"none",color:tab===id?B.gold:"rgba(255,255,255,.5)",fontSize:tab===id?20:18,fontWeight:700,cursor:"pointer",position:"relative",minWidth:48}}>
               {icon}
               <span style={{fontSize:9,fontWeight:600}}>{{"agenda":"Agenda","guardias":"Guardias","documentos":"Docs","facturacion":"Facturas","config":"Config"}[id]}</span>
@@ -467,7 +475,7 @@ export default function App(){
 
         {/* STATS */}
         <div style={{display:"grid",gridTemplateColumns:mob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-          {[{label:"Hoy",value:hoyN,icon:"🔪",accent:B.slate},{label:"Este mes",value:mesN,icon:"📅",accent:B.slateLight},{label:"Fact. pend.",value:pendFact,icon:"📋",accent:B.goldDark},{label:"Total",value:cirugias.length,icon:"📊",accent:B.slateDark}].map(s=>(
+          {[{label:"Hoy",value:hoyN,icon:"🔪",accent:B.slate},{label:"Este mes",value:mesN,icon:"📅",accent:B.slateLight},...(isAdmin?[{label:"Fact. pend.",value:pendFact,icon:"📋",accent:B.goldDark}]:[]),{label:"Total",value:cirugias.length,icon:"📊",accent:B.slateDark}].map(s=>(
             <div key={s.label} className="stat-card" style={{borderLeft:`4px solid ${s.accent}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div><div style={{fontSize:mob?22:26,fontWeight:700,color:s.accent,lineHeight:1}}>{s.value}</div><div style={{fontSize:11,color:B.muted,marginTop:3}}>{s.label}</div></div>
@@ -497,17 +505,17 @@ export default function App(){
                       {dc.slice(0,mob?2:3).map(c=><div key={c.id} style={{background:isSel?"rgba(255,255,255,.15)":bEst(c.estado),color:isSel?"white":ceColor(c.estado),borderRadius:3,padding:"1px 3px",fontSize:mob?8:9,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.inicio} {c.tipo}</div>)}
                       {dc.length>3&&<div style={{fontSize:9,color:isSel?"rgba(255,255,255,.6)":B.muted}}>+{dc.length-3}</div>}
                     </div>
-                    {isSel&&<button onClick={e=>{e.stopPropagation();openNewCx(dateStr);}} style={{position:"absolute",bottom:3,right:3,background:B.gold,border:"none",borderRadius:4,width:16,height:16,fontSize:11,fontWeight:700,color:B.slateDark,cursor:"pointer"}}>+</button>}
+                    {isSel&&canCreate&&<button onClick={e=>{e.stopPropagation();openNewCx(dateStr);}} style={{position:"absolute",bottom:3,right:3,background:B.gold,border:"none",borderRadius:4,width:16,height:16,fontSize:11,fontWeight:700,color:B.slateDark,cursor:"pointer"}}>+</button>}
                   </div>);
                 }}
               />
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
                 <h3 style={{fontSize:16,fontWeight:700,color:B.slateDark}}>{selDate===todayStr?"Hoy":selDate} <span style={{fontSize:13,fontWeight:400,color:B.muted}}>({cxDia.length})</span></h3>
-                <button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{padding:"7px 12px",fontSize:12}}>+ Añadir</button>
+                {canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{padding:"7px 12px",fontSize:12}}>+ Añadir</button>}
               </div>
-              {cxDia.length===0?<div className="card" style={{padding:32,textAlign:"center",color:B.muted}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Sin cirugías</div><button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{marginTop:12}}>+ Añadir</button></div>
+              {cxDia.length===0?<div className="card" style={{padding:32,textAlign:"center",color:B.muted}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Sin cirugías</div>{canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{marginTop:12}}>+ Añadir</button>}</div>
               :cxDia.sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(c=>(
-                <div key={c.id} className="card" style={{padding:"12px 14px",marginBottom:8,cursor:"pointer"}} onClick={()=>{setForm({...c});setModal("cx_e");}}>
+                <div key={c.id} className="card" style={{padding:"12px 14px",marginBottom:8,cursor:canCreate?"pointer":"default"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}>
                   <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
@@ -548,7 +556,7 @@ export default function App(){
                       <div style={{textAlign:"right"}}><div style={{color:"white",fontWeight:700,fontSize:20}}>{prox.length}</div><div style={{color:"rgba(255,255,255,.7)",fontSize:10}}>próximas</div></div>
                     </div>
                     {prox.length===0?<div style={{padding:16,textAlign:"center",color:B.muted,fontSize:13}}>Sin cirugías próximas</div>:prox.map(c=>(
-                      <div key={c.id} style={{padding:"10px 14px",borderBottom:`1px solid ${B.border}`,cursor:"pointer"}} onClick={()=>{setForm({...c});setModal("cx_e");}}>
+                      <div key={c.id} style={{padding:"10px 14px",borderBottom:`1px solid ${B.border}`,cursor:canCreate?"pointer":"default"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}>
                         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
                           <div><div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:B.slate,fontWeight:600}}>{c.fecha} · {c.inicio}–{c.fin}</div><div style={{fontWeight:600,fontSize:13,marginTop:2}}>{c.tipo}</div><div style={{fontSize:12,color:B.muted}}>{c.hospital}{c.cirujano!==p.nombre&&" · como ayudante"}</div></div>
                           <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
@@ -560,7 +568,7 @@ export default function App(){
               ):(
                 <div className="card" style={{overflow:"hidden"}}>
                   {cxProg.length===0?<div style={{padding:36,textAlign:"center",color:B.muted}}>Sin resultados</div>:cxProg.map((c,i)=>(
-                    <div key={c.id} style={{padding:"11px 16px",borderBottom:`1px solid ${B.border}`,cursor:"pointer",background:i%2===0?"white":"#FAFBFC"}} onClick={()=>{setForm({...c});setModal("cx_e");}}>
+                    <div key={c.id} style={{padding:"11px 16px",borderBottom:`1px solid ${B.border}`,cursor:canCreate?"pointer":"default",background:i%2===0?"white":"#FAFBFC"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}>
                       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
                         <div><div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:B.slate,fontWeight:600}}>{c.fecha} · {c.inicio}–{c.fin}</div><div style={{fontWeight:600,fontSize:13,marginTop:1}}>{c.tipo}</div><div style={{fontSize:12,color:B.muted}}>{c.hospital} · {c.cirujano}</div></div>
                         <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}><Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/><Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/></div>
@@ -579,7 +587,7 @@ export default function App(){
                 <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🛡️ Guardias</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>Asignación mensual por clínica</p></div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                   {hospNames.map((h,i)=><button key={h} onClick={()=>setGuardHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:guardHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:guardHosp===h?"white":B.slate,borderColor:guardHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
-                  {!isAdmin&&<button className="btn-gold" onClick={openSugerencia} style={{padding:"7px 13px",fontSize:13}}>+ Sugerir día</button>}
+                  {canSugerirGuardia&&<button className="btn-gold" onClick={openSugerencia} style={{padding:"7px 13px",fontSize:13}}>+ Sugerir día</button>}
                 </div>
               </div>
 
@@ -596,8 +604,8 @@ export default function App(){
                 </div>
               )}
 
-              {/* Mis sugerencias (no admin) */}
-              {!isAdmin&&(
+              {/* Mis sugerencias */}
+              {canSugerirGuardia&&(
                 <div style={{marginBottom:16}}>
                   <div style={{fontWeight:600,fontSize:13,color:B.slateDark,marginBottom:8}}>Mis sugerencias</div>
                   {sugerencias.filter(s=>s.usuario_id===authUser?.id).length===0?<div style={{fontSize:13,color:B.muted,fontStyle:"italic"}}>Aún no has sugerido ningún día de guardia.</div>:sugerencias.filter(s=>s.usuario_id===authUser?.id).slice(0,5).map(s=>(
@@ -649,7 +657,7 @@ export default function App(){
                     </div>
                     <div style={{padding:"12px 14px"}}>
                       {cxs.length===0?<div style={{color:B.muted,fontSize:13,textAlign:"center",padding:"16px 0"}}>Sin intervenciones</div>:cxs.sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(c=>(
-                        <div key={c.id} onClick={()=>{setForm({...c});setModal("cx_e");}} style={{padding:"9px 11px",borderRadius:9,border:`1.5px solid ${B.border}`,marginBottom:6,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=accent} onMouseLeave={e=>e.currentTarget.style.borderColor=B.border}>
+                        <div key={c.id} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}} style={{padding:"9px 11px",borderRadius:9,border:`1.5px solid ${B.border}`,marginBottom:6,cursor:canCreate?"pointer":"default"}} onMouseEnter={e=>{if(canCreate)e.currentTarget.style.borderColor=accent;}} onMouseLeave={e=>e.currentTarget.style.borderColor=B.border}>
                           <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}><span style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:600,color:accent}}>{c.inicio}–{c.fin}</span><Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/></div>
                           <div style={{fontWeight:600,fontSize:13}}>{c.tipo}</div>
                           <div style={{fontSize:11,color:B.muted,marginTop:1}}>{c.quirofano} · {c.cirujano}</div>
@@ -874,7 +882,8 @@ export default function App(){
                 <button onClick={()=>setModal(null)} style={{border:"none",background:B.bg,borderRadius:7,width:28,height:28,fontSize:16,color:B.muted,cursor:"pointer"}}>×</button>
               </div>
               <div className="form-grid">
-                {[["Fecha",<input type="date" className="inp" value={form.fecha||""} onChange={e=>setForm({...form,fecha:e.target.value})}/>],["Hospital",<select className="inp" value={form.hospital||""} onChange={e=>setForm({...form,hospital:e.target.value})}>{hospNames.map(h=><option key={h}>{h}</option>)}</select>],["Quirófano",<select className="inp" value={form.quirofano||""} onChange={e=>setForm({...form,quirofano:e.target.value})}>{"Q-1,Q-2,Q-3,Q-4".split(",").map(q=><option key={q}>{q}</option>)}</select>],["Tipo de cirugía",<input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/>],["Hora inicio",<input type="time" className="inp" value={form.inicio||""} onChange={e=>setForm({...form,inicio:e.target.value})}/>],["Hora fin",<input type="time" className="inp" value={form.fin||""} onChange={e=>setForm({...form,fin:e.target.value})}/>],["Cirujano",<select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Ayudante",<select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}><option value="">— Sin ayudante —</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Enfermera",<select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}><option value="">— Sin asignar —</option>{personal.filter(p=>p.rol?.includes("Enf")).map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Código paciente",<input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="PAC-2025-XXX"/>],["Estado",<select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select>],["Factura",<select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select>]].map(([l,f])=><FG key={l} label={l}>{f}</FG>)}
+                {[["Fecha",<input type="date" className="inp" value={form.fecha||""} onChange={e=>setForm({...form,fecha:e.target.value})}/>],["Hospital",<select className="inp" value={form.hospital||""} onChange={e=>setForm({...form,hospital:e.target.value})}>{hospNames.map(h=><option key={h}>{h}</option>)}</select>],["Quirófano",<select className="inp" value={form.quirofano||""} onChange={e=>setForm({...form,quirofano:e.target.value})}>{"Q-1,Q-2,Q-3,Q-4".split(",").map(q=><option key={q}>{q}</option>)}</select>],["Tipo de cirugía",<input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/>],["Hora inicio",<input type="time" className="inp" value={form.inicio||""} onChange={e=>setForm({...form,inicio:e.target.value})}/>],["Hora fin",<input type="time" className="inp" value={form.fin||""} onChange={e=>setForm({...form,fin:e.target.value})}/>],["Cirujano",<select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Ayudante",<select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}><option value="">— Sin ayudante —</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Enfermera",<select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}><option value="">— Sin asignar —</option>{personal.filter(p=>p.rol?.includes("Enf")).map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Código paciente",<input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="PAC-2025-XXX"/>],["Estado",<select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select>],...(isAdmin?[["Factura",<select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select>]]:[])]
+                .map(([l,f])=><FG key={l} label={l}>{f}</FG>)}
               </div>
               <FG label="Observaciones" style={{marginTop:12}}><textarea className="inp" rows={2} value={form.obs||""} onChange={e=>setForm({...form,obs:e.target.value})} placeholder="Notas..." style={{resize:"vertical"}}/></FG>
               <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"space-between"}}>

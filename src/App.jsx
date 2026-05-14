@@ -173,6 +173,8 @@ export default function App(){
   const[calM,setCalM]=useState(today.getMonth());
   const[gY,setGY]=useState(today.getFullYear());
   const[gM,setGM]=useState(today.getMonth());
+  const[hospY,setHospY]=useState(today.getFullYear());
+  const[hospM,setHospM]=useState(today.getMonth());
   const[filtFact,setFiltFact]=useState("Todos");
   const[filtCir,setFiltCir]=useState("Todos");
   const[filtCli,setFiltCli]=useState("Todos");
@@ -371,6 +373,10 @@ export default function App(){
       .stat-card{padding:12px 14px}
       .hide-mobile{display:none!important}
       .full-mobile{width:100%!important}
+      .cal-day{min-height:58px!important;padding:3px 2px!important}
+      .guard-day{min-height:50px!important;padding:3px 2px!important}
+      .cal-day>div:first-child,
+      .guard-day>div:first-child{margin-bottom:1px!important}
     }
   `;
 
@@ -641,9 +647,45 @@ export default function App(){
           {/* ══ HOSPITALES ══ */}
           {tab==="hospitales"&&(
             <div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{marginBottom:14}}>
                 <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🏨 Hospitales</h2>
-                <input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} className="inp" style={{width:mob?"100%":160}}/>
+                <div style={{display:"flex",gap:10,marginTop:8,flexWrap:"wrap"}}>
+                  {hospitales.map((h,idx)=>(
+                    <div key={h.id} style={{display:"flex",alignItems:"center",gap:5}}>
+                      <div style={{width:10,height:10,borderRadius:"50%",background:ACCENTS[idx%ACCENTS.length],flexShrink:0}}/>
+                      <span style={{fontSize:12,color:B.muted,fontWeight:500}}>{h.nombre}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <CalMes year={hospY} month={hospM}
+                onPrev={()=>prevM(hospY,hospM,setHospY,setHospM)}
+                onNext={()=>nextM(hospY,hospM,setHospY,setHospM)}
+                onToday={()=>{setHospY(today.getFullYear());setHospM(today.getMonth());setSelDate(todayStr);}}
+                renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                  const isSel=dateStr===selDate;
+                  const hospDots=hospitales.map((h,idx)=>({h,color:ACCENTS[idx%ACCENTS.length],n:cirugias.filter(c=>c.hospital===h.nombre&&c.fecha===dateStr).length})).filter(x=>x.n>0);
+                  const total=hospDots.reduce((s,x)=>s+x.n,0);
+                  return(
+                    <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:isWeekend?"#FAFBFC":"white"}} onClick={()=>setSelDate(dateStr)}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                        {total>0&&<span style={{fontSize:9,fontWeight:700,background:isSel?"rgba(255,255,255,.25)":B.slateLight,color:"white",borderRadius:8,padding:"1px 4px"}}>{total}</span>}
+                      </div>
+                      {hospDots.length>0&&(
+                        <div style={{display:"flex",gap:2,marginTop:2}}>
+                          {hospDots.map(({h,color})=>(
+                            <div key={h.id} style={{height:4,borderRadius:2,background:isSel?"rgba(255,255,255,.55)":color,flex:1}}/>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <h3 style={{fontSize:15,fontWeight:700,color:B.slateDark}}>{selDate===todayStr?"Hoy":selDate}</h3>
+                <span style={{fontSize:13,color:B.muted}}>({cirugias.filter(c=>c.fecha===selDate).length} cirugía{cirugias.filter(c=>c.fecha===selDate).length!==1?"s":""})</span>
               </div>
               <div style={{display:"grid",gridTemplateColumns:mob?"1fr":hospitales.length===1?"1fr":hospitales.length===2?"repeat(2,1fr)":"repeat(3,1fr)",gap:14}}>
                 {hospitales.map((h,idx)=>{

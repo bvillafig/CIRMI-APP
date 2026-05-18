@@ -41,6 +41,7 @@ const ROL_CIR_PRINCIPAL="cirujano_principal";
 const ROL_CIRUJANO="cirujano";
 const ROL_ENFERMERO="enfermero";
 const ROLES_P=["Cirujano Principal","Cirujano","Enf. Instrumentista"];
+const QUIROFANOS=["Q-1","Q-2","Q-3","Q-4"];
 const COLORES=["#4A6079","#2E3F52","#6B8299","#D4A820","#8B6914","#3D6B8C","#6B4F9A","#2E7D52","#B91C1C","#1D6FA4"];
 const ESTADOS_CX=["Confirmada","Pendiente","Realizada","Cancelada"];
 const ESTADOS_FA=["Pendiente","Facturada","En revisión","Cobrada"];
@@ -175,6 +176,11 @@ export default function App(){
   const[gM,setGM]=useState(today.getMonth());
   const[hospY,setHospY]=useState(today.getFullYear());
   const[hospM,setHospM]=useState(today.getMonth());
+  const[quirY,setQuirY]=useState(today.getFullYear());
+  const[quirM,setQuirM]=useState(today.getMonth());
+  const[quirHosp,setQuirHosp]=useState(null);
+  const[quirDate,setQuirDate]=useState(todayStr);
+  const[quirEstados,setQuirEstados]=useState([]);
   const[filtFact,setFiltFact]=useState("Todos");
   const[filtCir,setFiltCir]=useState("Todos");
   const[filtCli,setFiltCli]=useState("Todos");
@@ -213,7 +219,7 @@ export default function App(){
   const loadAll=async()=>{
     setLoading(true);
     try{
-      const[c,p,h,g,s,d,n]=await Promise.all([
+      const[c,p,h,g,s,d,n,qe]=await Promise.all([
         dbGet("cirugias","order=fecha.asc,inicio.asc"),
         dbGet("personal","order=nombre.asc&activo=eq.true"),
         dbGet("hospitales","order=nombre.asc&activo=eq.true"),
@@ -221,9 +227,11 @@ export default function App(){
         dbGet("sugerencias_guardia","order=created_at.desc"),
         dbGet("documentos","order=created_at.desc"),
         dbGet("notificaciones",`usuario_id=eq.${authUser?.id}&order=created_at.desc&limit=20`),
+        dbGet("quirofanos_estado","order=fecha.asc"),
       ]);
-      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);
+      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);setQuirEstados(qe);
       if(h.length>0&&!guardHosp)setGuardHosp(h[0].nombre);
+      if(h.length>0&&!quirHosp)setQuirHosp(h[0].nombre);
       if(isAdmin){const pf=await dbGet("perfiles","order=created_at.desc");setPerfiles(pf);}
     }catch(e){console.error(e);}finally{setLoading(false);}
   };
@@ -296,6 +304,18 @@ export default function App(){
     try{await deleteStorageFile(doc.url,session);await dbDelete("documentos",doc.id);await loadAll();}catch{alert("Error.");}
   };
 
+  // ── Quirófanos ──
+  const turnoFromHora=(inicio)=>inicio&&inicio<"15:00"?"mañana":"tarde";
+  const toggleCerrado=async(hospital,quirofano,fecha,turno)=>{
+    const ex=quirEstados.find(q=>q.hospital===hospital&&q.quirofano===quirofano&&q.fecha===fecha&&q.turno===turno);
+    setSaving(true);
+    try{
+      if(ex){await dbUpdate("quirofanos_estado",ex.id,{cerrado:!ex.cerrado},session);}
+      else{await dbInsert("quirofanos_estado",{hospital,quirofano,fecha,turno,cerrado:true},session);}
+      const qe=await dbGet("quirofanos_estado","order=fecha.asc");setQuirEstados(qe);
+    }catch{alert("Error.");}finally{setSaving(false);}
+  };
+
   // ── Personal ──
   const openNewP=()=>{setForm({nombre:"",rol:"Cirujano",hospitales:[],tel:"",color:COLORES[0],activo:true});setModal("p_n");};
   const saveP=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="p_n")await dbInsert("personal",form);else{const{id,...d}=form;await dbUpdate("personal",id,d);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);};};
@@ -326,6 +346,7 @@ export default function App(){
     ["agenda","📅","Agenda"],
     ["programacion","👨‍⚕️","Programa"],
     ["guardias","🛡️","Guardias"],
+    ["quirofanos","🏥","Quirófanos"],
     ["hospitales","🏨","Hospitales"],
     ["personal","👥","Personal"],
     ["documentos","📁","Documentos"],
@@ -644,6 +665,117 @@ export default function App(){
                   </div>);
                 }}
               />
+            </div>
+          )}
+
+          {/* ══ QUIRÓFANOS ══ */}
+          {tab==="quirofanos"&&(
+            <div>
+              {/* Cabecera + selector de hospital */}
+              <div style={{marginBottom:14}}>
+                <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:10}}>🏥 Quirófanos</h2>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {hospNames.map((h,i)=><button key={h} onClick={()=>setQuirHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:quirHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:quirHosp===h?"white":B.slate,borderColor:quirHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
+                </div>
+              </div>
+
+              {/* Calendario */}
+              <CalMes year={quirY} month={quirM}
+                onPrev={()=>prevM(quirY,quirM,setQuirY,setQuirM)}
+                onNext={()=>nextM(quirY,quirM,setQuirY,setQuirM)}
+                onToday={()=>{setQuirY(today.getFullYear());setQuirM(today.getMonth());setQuirDate(todayStr);}}
+                renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                  const isSel=dateStr===quirDate;
+                  const indicadores=QUIROFANOS.map(q=>{
+                    const cxsDia=cirugias.filter(c=>c.hospital===quirHosp&&c.quirofano===q&&c.fecha===dateStr);
+                    const cerradoM=quirEstados.find(e=>e.hospital===quirHosp&&e.quirofano===q&&e.fecha===dateStr&&e.turno==="mañana"&&e.cerrado);
+                    const cerradoT=quirEstados.find(e=>e.hospital===quirHosp&&e.quirofano===q&&e.fecha===dateStr&&e.turno==="tarde"&&e.cerrado);
+                    const ocupado=cxsDia.length>0;
+                    const cerrado=cerradoM&&cerradoT;
+                    return{q,color:cerrado?"#B91C1C":ocupado?"#D4A820":"#2E7D52",cerrado,ocupado};
+                  });
+                  const hayActividad=indicadores.some(x=>x.cerrado||x.ocupado);
+                  return(
+                    <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:isWeekend?"#FAFBFC":"white"}} onClick={()=>setQuirDate(dateStr)}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                      </div>
+                      {hayActividad&&(
+                        <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+                          {indicadores.filter(x=>x.cerrado||x.ocupado).map(({q,color})=>(
+                            <div key={q} title={q} style={{width:mob?7:8,height:mob?7:8,borderRadius:2,background:isSel?"rgba(255,255,255,.5)":color,flexShrink:0}}/>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+
+              {/* Panel de día seleccionado */}
+              <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                <h3 style={{fontSize:15,fontWeight:700,color:B.slateDark}}>{quirDate===todayStr?"Hoy":quirDate}</h3>
+                <span style={{fontSize:12,color:B.muted}}>{quirHosp}</span>
+              </div>
+
+              {/* Leyenda */}
+              <div style={{display:"flex",gap:14,marginBottom:12,flexWrap:"wrap"}}>
+                {[["#2E7D52","Disponible"],["#D4A820","Con cirugías programadas"],["#B91C1C","Cerrado (módulo lleno)"]].map(([c,l])=>(
+                  <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:11,color:B.muted}}>{l}</span></div>
+                ))}
+              </div>
+
+              {/* Tabla quirófanos × turno */}
+              <div style={{background:"white",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
+                {/* Header */}
+                <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr",background:B.slateDark}}>
+                  <div style={{padding:"10px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:.5}}>Quirófano</div>
+                  {["Mañana","Tarde"].map(t=><div key={t} style={{padding:"10px 12px",fontSize:11,fontWeight:700,color:"white",textTransform:"uppercase",letterSpacing:.5,borderLeft:"1px solid rgba(255,255,255,.1)"}}>{t}</div>)}
+                </div>
+                {/* Filas */}
+                {QUIROFANOS.map((q,qi)=>(
+                  <div key={q} style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr",borderBottom:qi<QUIROFANOS.length-1?`1px solid ${B.border}`:"none"}}>
+                    <div style={{padding:"12px",fontWeight:700,fontSize:13,color:B.slateDark,display:"flex",alignItems:"center",background:"#FAFBFC",borderRight:`1px solid ${B.border}`}}>{q}</div>
+                    {["mañana","tarde"].map(turno=>{
+                      const cxs=cirugias.filter(c=>c.hospital===quirHosp&&c.quirofano===q&&c.fecha===quirDate&&turnoFromHora(c.inicio)===turno);
+                      const estadoReg=quirEstados.find(e=>e.hospital===quirHosp&&e.quirofano===q&&e.fecha===quirDate&&e.turno===turno);
+                      const cerrado=estadoReg?.cerrado||false;
+                      const ocupado=cxs.length>0;
+                      const bg=cerrado?"#FEF2F2":ocupado?"#FFFBEB":"#F0FDF4";
+                      const borderColor=cerrado?"#FECACA":ocupado?"#FDE68A":"#BBF7D0";
+                      const cirujanos=[...new Set(cxs.map(c=>c.cirujano).filter(Boolean))];
+                      return(
+                        <div key={turno} style={{padding:"10px 12px",background:bg,borderLeft:`1px solid ${B.border}`,borderBottom:"none"}}>
+                          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                            <div style={{flex:1}}>
+                              <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:cirujanos.length>0?4:0}}>
+                                <div style={{width:8,height:8,borderRadius:"50%",background:cerrado?"#B91C1C":ocupado?"#D4A820":"#2E7D52",flexShrink:0}}/>
+                                <span style={{fontSize:11,fontWeight:600,color:cerrado?"#B91C1C":ocupado?"#92400E":"#166534"}}>
+                                  {cerrado?"Cerrado":ocupado?"Con cirugías":"Disponible"}
+                                </span>
+                              </div>
+                              {cirujanos.length>0&&<div style={{fontSize:11,color:B.muted,marginTop:2}}>🔪 {cirujanos.join(", ")}</div>}
+                              {cxs.length>1&&<div style={{fontSize:10,color:B.muted}}>{cxs.length} intervenciones</div>}
+                            </div>
+                            {canCreate&&(
+                              <button
+                                onClick={()=>toggleCerrado(quirHosp,q,quirDate,turno)}
+                                disabled={saving}
+                                style={{flexShrink:0,padding:"3px 8px",borderRadius:6,border:"1.5px solid",fontSize:10,fontWeight:600,cursor:"pointer",
+                                  background:cerrado?"#E6F4EC":"#FEF2F2",
+                                  color:cerrado?"#2E7D52":"#DC2626",
+                                  borderColor:cerrado?"#86EFAC":"#FECACA"
+                                }}>
+                                {cerrado?"Abrir":"Cerrar"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

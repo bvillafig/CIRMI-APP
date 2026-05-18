@@ -502,15 +502,18 @@ export default function App(){
                 onToday={()=>{setCalY(today.getFullYear());setCalM(today.getMonth());setSelDate(todayStr);}}
                 renderDay={({day,dateStr,isToday,isWeekend,col})=>{
                   const dc=cirugias.filter(c=>c.fecha===dateStr),isSel=dateStr===selDate;
+                  const porClinica=hospitales.map((h,idx)=>({nombre:h.nombre,color:ACCENTS[idx%ACCENTS.length],n:dc.filter(c=>c.hospital===h.nombre).length})).filter(x=>x.n>0);
                   return(<div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isWeekend?"#FAFBFC":"white"}} onClick={()=>setSelDate(dateStr)}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                       <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday&&!isSel?B.gold:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
-                      {dc.length>0&&<span style={{fontSize:9,fontWeight:700,background:isSel?"rgba(255,255,255,.2)":B.slateLight,color:"white",borderRadius:8,padding:"1px 4px"}}>{dc.length}</span>}
                     </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                      {dc.slice(0,mob?2:3).map(c=><div key={c.id} style={{background:isSel?"rgba(255,255,255,.15)":bEst(c.estado),color:isSel?"white":ceColor(c.estado),borderRadius:3,padding:"1px 3px",fontSize:mob?8:9,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.inicio} {c.tipo}</div>)}
-                      {dc.length>3&&<div style={{fontSize:9,color:isSel?"rgba(255,255,255,.6)":B.muted}}>+{dc.length-3}</div>}
-                    </div>
+                    {porClinica.length>0&&(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:2}}>
+                        {porClinica.map(({nombre,color,n})=>(
+                          <div key={nombre} title={nombre} style={{background:isSel?"rgba(255,255,255,.28)":color,color:"white",borderRadius:5,padding:"2px 5px",fontSize:10,fontWeight:700,lineHeight:1.2}}>{n}</div>
+                        ))}
+                      </div>
+                    )}
                     {isSel&&canCreate&&<button onClick={e=>{e.stopPropagation();openNewCx(dateStr);}} style={{position:"absolute",bottom:3,right:3,background:B.gold,border:"none",borderRadius:4,width:16,height:16,fontSize:11,fontWeight:700,color:B.slateDark,cursor:"pointer"}}>+</button>}
                   </div>);
                 }}

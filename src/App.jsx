@@ -201,6 +201,10 @@ export default function App(){
   const[agFiltHosp,setAgFiltHosp]=useState("Todos");
   const[agFiltEst,setAgFiltEst]=useState("Todos");
   const[auditoria,setAuditoria]=useState([]);
+  const[ausencias,setAusencias]=useState([]);
+  const[ausForm,setAusForm]=useState({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});
+  const[showAusForm,setShowAusForm]=useState(false);
+  const[notifProactivas,setNotifProactivas]=useState(()=>localStorage.getItem("cirmi_notif_proact")!=="false");
   const[uploading,setUploading]=useState(false);
   const fileRef=useRef();
 
@@ -231,7 +235,7 @@ export default function App(){
   const loadAll=async()=>{
     setLoading(true);
     try{
-      const[c,p,h,g,s,d,n,qe,ce,au]=await Promise.all([
+      const[c,p,h,g,s,d,n,qe,ce,au,aus]=await Promise.all([
         dbGet("cirugias","order=fecha.asc,inicio.asc"),
         dbGet("personal","order=nombre.asc&activo=eq.true"),
         dbGet("hospitales","order=nombre.asc&activo=eq.true"),
@@ -242,8 +246,9 @@ export default function App(){
         dbGet("quirofanos_estado","order=fecha.asc"),
         dbGet("consultas_estado","order=fecha.asc"),
         dbGet("auditoria","order=created_at.desc&limit=300",session),
+        dbGet("ausencias","order=fecha_inicio.asc"),
       ]);
-      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);setQuirEstados(qe);setConsEstados(ce);setAuditoria(au||[]);
+      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);setQuirEstados(qe);setConsEstados(ce);setAuditoria(au||[]);setAusencias(aus||[]);
       if(h.length>0&&!guardHosp)setGuardHosp(h[0].nombre);
       if(h.length>0&&!quirHosp)setQuirHosp(h[0].nombre);
       if(h.length>0&&!consHosp)setConsHosp(h[0].nombre);
@@ -260,6 +265,12 @@ export default function App(){
   const markAllRead=async()=>{try{await Promise.all(notifs.filter(n=>!n.leida).map(n=>dbUpdate("notificaciones",n.id,{leida:true},session)));setNotifs(n=>n.map(x=>({...x,leida:true})));}catch{}};
   const createNotif=async(uid,msg)=>{try{await dbInsert("notificaciones",{usuario_id:uid,mensaje:msg},session);}catch{}};
   const logAudit=async(tabla,registro_id,accion,cambios)=>{try{await dbInsert("auditoria",{tabla,registro_id,accion,cambios,usuario_nombre:perfil?.nombre||perfil?.email||"",usuario_id:authUser?.id},session);}catch{}};
+  const estaAusente=(nombre,fecha)=>ausencias.some(a=>a.personal_nombre===nombre&&fecha>=a.fecha_inicio&&fecha<=a.fecha_fin);
+  const addAusencia=async()=>{if(!ausForm.fecha_inicio||!ausForm.fecha_fin||ausForm.fecha_fin<ausForm.fecha_inicio){alert("Fechas inválidas.");return;}setSaving(true);try{await dbInsert("ausencias",{personal_id:form.id,personal_nombre:form.nombre,fecha_inicio:ausForm.fecha_inicio,fecha_fin:ausForm.fecha_fin,motivo:ausForm.motivo||""},session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);setShowAusForm(false);setAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}catch{alert("Error.");}finally{setSaving(false);}};
+  const delAusencia=async(id)=>{if(!confirm("¿Eliminar ausencia?"))return;try{await dbDelete("ausencias",id,session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);}catch{alert("Error.");}};
+  const toggleNotifProactivas=()=>{const v=!notifProactivas;setNotifProactivas(v);localStorage.setItem("cirmi_notif_proact",String(v));};
+  const exportarDia=()=>{const cxs=cxDiaFilt.slice().sort((a,b)=>a.inicio.localeCompare(b.inicio));const rows=cxs.map(c=>`<tr><td>${c.inicio||""}–${c.fin||""}</td><td>${c.tipo||""}</td><td>${c.paciente||""}</td><td>${c.cirujano||""}</td><td>${c.ayudante||""}</td><td>${c.enfermera||""}</td><td>${c.quirofano||""}</td><td>${c.hospital||""}</td><td>${(c.material||"").replace(/</g,"&lt;")}</td><td>${(c.obs||"").replace(/</g,"&lt;")}</td></tr>`).join("");const html=`<!DOCTYPE html><html><head><title>CIRMI – Parte ${selDate}</title><style>body{font-family:Arial,sans-serif;font-size:12px;color:#1C2B3A;margin:20px}h1{font-size:16px;color:#2E3F52;margin-bottom:4px}h2{font-size:12px;font-weight:normal;color:#7A90A4;margin-bottom:18px}table{width:100%;border-collapse:collapse}th{background:#4A6079;color:white;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}td{padding:6px 8px;border-bottom:1px solid #DDE4EB;font-size:11px;vertical-align:top}tr:nth-child(even)td{background:#F2F5F8}footer{margin-top:20px;font-size:10px;color:#7A90A4}@media print{body{margin:0}}</style></head><body><h1>CIRMI — Parte diario</h1><h2>${selDate} · ${cxs.length} intervención${cxs.length!==1?"es":""}${agFiltHosp!=="Todos"?" · "+agFiltHosp:""}</h2>${rows?`<table><thead><tr><th>Hora</th><th>Tipo</th><th>Paciente</th><th>Cirujano</th><th>Ayudante</th><th>Enfermera</th><th>Quirófano</th><th>Hospital</th><th>Material</th><th>Notas</th></tr></thead><tbody>${rows}</tbody></table>`:"<p style='color:#7A90A4;text-align:center;padding:30px'>Sin cirugías este día</p>"}<footer>Generado ${new Date().toLocaleString("es-ES")} · CIRMI Gestión Quirúrgica</footer><script>window.onload=function(){window.print()}<\/script></body></html>`;const w=window.open("","_blank","width=1100,height=720");if(w){w.document.write(html);w.document.close();}};
+  const exportarCSVMes=()=>{const hoy=new Date();const cxs=cirugias.filter(c=>{const d=new Date(c.fecha+'T12:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear()&&(filtFact==="Todos"||c.factura===filtFact);}).sort((a,b)=>a.fecha.localeCompare(b.fecha));const hdr=["ID","Fecha","Tipo","Paciente","Cirujano","Ayudante","Enfermera","Hospital","Quirófano","Estado","Factura","Material","Observaciones"];const rows=cxs.map(c=>[c.id,c.fecha,c.tipo||"",c.paciente||"",c.cirujano||"",c.ayudante||"",c.enfermera||"",c.hospital||"",c.quirofano||"",c.estado||"",c.factura||"",c.material||"",(c.obs||"").replace(/,/g,";")]);const csv=[hdr,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`CIRMI-${MESES[hoy.getMonth()]}-${hoy.getFullYear()}.csv`;a.click();URL.revokeObjectURL(url);};
 
   // ── Cirugías ──
   const openNewCx=(fecha=selDate)=>{setForm({id:newId(),fecha,hospital:hospNames[0]||"",quirofano:"Q-1",tipo:"",cirujano:personal[0]?.nombre||"",ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});setModal("cx_n");};
@@ -381,6 +392,10 @@ export default function App(){
   const cxDia=cirugias.filter(c=>c.fecha===selDate);
   const cxDiaFilt=cxDia.filter(c=>(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst));
   const sugPend=sugerencias.filter(s=>s.estado==="pendiente");
+  const alertasProact=notifProactivas?[
+    ...cirugias.filter(c=>{const diff=(new Date(c.fecha+'T12:00:00')-today)/86400000;return diff>=0&&diff<=2&&c.estado!=="Cancelada"&&(!c.ayudante||!c.enfermera);}).map(c=>({tipo:"cx",msg:`Cirugía ${c.fecha} — ${c.tipo||"sin tipo"}: ${[!c.ayudante&&"sin ayudante",!c.enfermera&&"sin enfermera"].filter(Boolean).join(" y ")} · ${c.hospital}`})),
+    ...hospNames.flatMap(h=>{const n14=Array.from({length:14},(_,i)=>{const d=new Date(today);d.setDate(d.getDate()+i);return fmt(d);}).filter(f=>!guardias.find(g=>g.fecha===f&&g.hospital===h)).length;return n14>2?[{tipo:"guardia",msg:`${n14} días sin guardia asignada en los próximos 14 días · ${h}`}]:[];})
+  ]:[];
   const cxProg=cirugias.filter(c=>(filtCir==="Todos"||c.cirujano===filtCir||c.ayudante===filtCir)&&(filtCli==="Todos"||c.hospital===filtCli)).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.inicio.localeCompare(b.inicio));
   const docsFilt=documentos.filter(d=>filtCat==="Todos"||d.categoria===filtCat);
 
@@ -629,6 +644,33 @@ export default function App(){
                   </div>
                 </div>
               </div>
+
+              {/* Alertas proactivas */}
+              {alertasProact.length>0&&(
+                <div style={{marginTop:16,background:"white",borderRadius:14,border:`1.5px solid ${B.gold}`,overflow:"hidden"}}>
+                  <div style={{padding:"10px 16px",background:B.goldLight,borderBottom:`1px solid ${B.gold}`,display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:15}}>⚠️</span>
+                    <div style={{fontWeight:700,fontSize:13,color:B.goldDark}}>Alertas ({alertasProact.length})</div>
+                  </div>
+                  {alertasProact.map((a,i)=>(
+                    <div key={i} style={{padding:"9px 16px",borderBottom:i<alertasProact.length-1?`1px solid ${B.border}`:"none",fontSize:12,color:B.text,display:"flex",gap:8,alignItems:"flex-start"}}>
+                      <span style={{fontSize:13,flexShrink:0}}>{a.tipo==="cx"?"🔪":"🛡️"}</span>
+                      <span>{a.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Toggle notificaciones proactivas */}
+              <div style={{marginTop:16,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"white",borderRadius:10,border:`1px solid ${B.border}`}}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:B.text}}>🔔 Alertas proactivas</div>
+                  <div style={{fontSize:11,color:B.muted}}>Avisos de cirugías sin equipo y guardias sin cubrir</div>
+                </div>
+                <div onClick={toggleNotifProactivas} style={{width:40,height:22,borderRadius:11,background:notifProactivas?B.slate:B.border,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+                  <div style={{position:"absolute",top:3,left:notifProactivas?20:3,width:16,height:16,borderRadius:"50%",background:"white",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+                </div>
+              </div>
             );
           })()}
 
@@ -651,6 +693,7 @@ export default function App(){
                     <option value="Todos">Todos los estados</option>
                     {ESTADOS_CX.map(e=><option key={e}>{e}</option>)}
                   </select>
+                  <button className="btn-sec" onClick={exportarDia} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📄 Parte día</button>
                   <button className="btn-sec" onClick={exportarSemana} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📄 PDF semana</button>
                 </div>
               </div>
@@ -845,6 +888,23 @@ export default function App(){
                   ))}
                 </div>
               )}
+
+              {(()=>{
+                const diasMes=new Date(gY,gM+1,0).getDate();
+                const resumen=hospNames.map(h=>{const asignados=Array.from({length:diasMes},(_,i)=>fmt(new Date(gY,gM,i+1))).filter(f=>guardias.find(g=>g.fecha===f&&g.hospital===h)).length;return{h,asignados,total:diasMes,sin:diasMes-asignados};});
+                return(<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+                  {resumen.map(({h,asignados,sin},i)=>(
+                    <div key={h} style={{flex:1,minWidth:120,background:"white",borderRadius:11,padding:"10px 14px",border:`1.5px solid ${sin===0?"#86EFAC":sin>10?B.gold:B.border}`}}>
+                      <div style={{fontSize:10,fontWeight:700,color:ACCENTS[i%ACCENTS.length],textTransform:"uppercase",letterSpacing:.5,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h}</div>
+                      <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+                        <span style={{fontSize:22,fontWeight:700,color:sin===0?"#2E7D52":sin>10?B.goldDark:B.slate}}>{asignados}</span>
+                        <span style={{fontSize:11,color:B.muted}}>/ {new Date(gY,gM+1,0).getDate()} días</span>
+                      </div>
+                      {sin>0?<div style={{fontSize:10,color:B.goldDark,marginTop:2}}>⚠ {sin} sin cubrir</div>:<div style={{fontSize:10,color:"#2E7D52",marginTop:2}}>✓ Mes completo</div>}
+                    </div>
+                  ))}
+                </div>);
+              })()}
 
               <CalMes year={gY} month={gM}
                 onPrev={()=>prevM(gY,gM,setGY,setGM)}
@@ -1152,8 +1212,9 @@ export default function App(){
             <div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
                 <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>💰 Facturación</h2>
-                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
                   {["Todos","Pendiente","Facturada","En revisión","Cobrada"].map(f=><button key={f} onClick={()=>setFiltFact(f)} style={{padding:"6px 11px",borderRadius:7,border:"1.5px solid",fontSize:12,fontWeight:500,cursor:"pointer",background:filtFact===f?B.slateDark:"white",color:filtFact===f?"white":B.slate,borderColor:filtFact===f?B.slateDark:B.border}}>{f}</button>)}
+                  <button className="btn-sec" onClick={exportarCSVMes} style={{padding:"6px 12px",fontSize:12}}>📊 CSV mes</button>
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
@@ -1290,7 +1351,11 @@ export default function App(){
                 {[["Fecha",<input type="date" className="inp" value={form.fecha||""} onChange={e=>setForm({...form,fecha:e.target.value})}/>],["Hospital",<select className="inp" value={form.hospital||""} onChange={e=>setForm({...form,hospital:e.target.value})}>{hospNames.map(h=><option key={h}>{h}</option>)}</select>],["Quirófano",<select className="inp" value={form.quirofano||""} onChange={e=>setForm({...form,quirofano:e.target.value})}>{"Q-1,Q-2,Q-3,Q-4".split(",").map(q=><option key={q}>{q}</option>)}</select>],["Tipo de cirugía",<input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/>],["Hora inicio",<input type="time" className="inp" value={form.inicio||""} onChange={e=>setForm({...form,inicio:e.target.value})}/>],["Hora fin",<input type="time" className="inp" value={form.fin||""} onChange={e=>setForm({...form,fin:e.target.value})}/>],["Cirujano",<select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Ayudante",<select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}><option value="">— Sin ayudante —</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Enfermera",<select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}><option value="">— Sin asignar —</option>{personal.filter(p=>p.rol?.includes("Enf")).map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Código paciente",<input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="PAC-2025-XXX"/>],["Estado",<select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select>],...(isAdmin?[["Factura",<select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select>]]:[])]
                 .map(([l,f])=><FG key={l} label={l}>{f}</FG>)}
               </div>
+              <FG label="Material especial" style={{marginTop:12}}><input className="inp" value={form.material||""} onChange={e=>setForm({...form,material:e.target.value})} placeholder="Ej: Laparoscopio 5mm, sutura reabsorbible..."/></FG>
               <FG label="Observaciones" style={{marginTop:12}}><textarea className="inp" rows={2} value={form.obs||""} onChange={e=>setForm({...form,obs:e.target.value})} placeholder="Notas..." style={{resize:"vertical"}}/></FG>
+              {form.fecha&&[form.cirujano,form.ayudante,form.enfermera].filter(Boolean).filter(n=>estaAusente(n,form.fecha)).map(n=>(
+                <div key={n} style={{marginTop:8,padding:"7px 10px",background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:8,fontSize:12,color:"#92400E"}}>⚠ <strong>{n}</strong> tiene ausencia registrada el {form.fecha}</div>
+              ))}
               {modal==="cx_e"&&(()=>{const hist=auditoria.filter(a=>a.registro_id===form.id).slice(0,6);return hist.length>0?(<div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${B.border}`}}><div style={{fontSize:10,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Historial de cambios</div>{hist.map((a,i)=><div key={i} style={{fontSize:11,color:B.muted,marginBottom:5,padding:"5px 8px",background:B.bg,borderRadius:6}}><span style={{color:B.slate,fontWeight:600}}>{a.usuario_nombre}</span> · {(a.created_at||"").slice(0,16).replace("T"," ")} · {a.accion==="insert"?"⊕ Creada":a.accion==="delete"?"✕ Eliminada":`✎ ${Object.keys(a.cambios||{}).join(", ")}`}</div>)}</div>):null;})()}
               <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"space-between"}}>
                 <div style={{display:"flex",gap:8}}>{modal==="cx_e"&&<button className="btn-danger" onClick={()=>delCx(form.id)} disabled={saving}>🗑</button>}{modal==="cx_e"&&<button className="btn-sec" onClick={duplicarCx} style={{fontSize:12}}>📋 Duplicar</button>}</div>
@@ -1309,6 +1374,9 @@ export default function App(){
                 <FG label="Cirujano ayudante"><select className="inp" value={form.cirujano_ayudante||""} onChange={e=>setForm({...form,cirujano_ayudante:e.target.value})}><option value="">— Sin asignar —</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select></FG>
                 <FG label="Notas"><input className="inp" value={form.notas||""} onChange={e=>setForm({...form,notas:e.target.value})} placeholder="Observaciones..."/></FG>
               </div>
+              {form.fecha&&[form.cirujano_principal,form.cirujano_ayudante].filter(Boolean).filter(n=>estaAusente(n,form.fecha)).map(n=>(
+                <div key={n} style={{marginTop:8,padding:"7px 10px",background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:8,fontSize:12,color:"#92400E"}}>⚠ <strong>{n}</strong> tiene ausencia registrada el {form.fecha}</div>
+              ))}
               <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"space-between"}}>
                 <div>{form.id&&<button className="btn-danger" onClick={()=>delGuardia(form.id)}>🗑 Eliminar</button>}</div>
                 <div style={{display:"flex",gap:10}}><button className="btn-sec" onClick={()=>setModal(null)}>Cancelar</button><button className="btn-gold" onClick={saveGuardia} disabled={saving}>{saving?"Guardando...":"Guardar"}</button></div>
@@ -1368,6 +1436,38 @@ export default function App(){
                 <FG label="Color"><div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>{COLORES.map(c=><div key={c} onClick={()=>setForm({...form,color:c})} style={{width:24,height:24,borderRadius:"50%",background:c,cursor:"pointer",border:form.color===c?`3px solid ${B.slateDark}`:"3px solid transparent",transition:"all .15s"}}/>)}</div></FG>
               </div>
               <FG label="Hospitales" style={{marginTop:12}}><div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>{hospitales.map(h=><div key={h.id} onClick={()=>togH(h.nombre)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:(form.hospitales||[]).includes(h.nombre)?B.slate:"white",color:(form.hospitales||[]).includes(h.nombre)?"white":B.slate,borderColor:(form.hospitales||[]).includes(h.nombre)?B.slate:B.border}}>{h.nombre}</div>)}</div></FG>
+              {modal==="p_e"&&(
+                <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${B.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{fontSize:12,fontWeight:700,color:B.slateDark}}>📅 Ausencias</div>
+                    <button className="btn-sec" style={{padding:"3px 9px",fontSize:11}} onClick={()=>{setShowAusForm(!showAusForm);setAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}}>+ Añadir</button>
+                  </div>
+                  {showAusForm&&(
+                    <div style={{background:B.bg,borderRadius:9,padding:"10px 12px",marginBottom:10,display:"flex",flexDirection:"column",gap:9}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <FG label="Desde"><input type="date" className="inp" value={ausForm.fecha_inicio} onChange={e=>setAusForm({...ausForm,fecha_inicio:e.target.value})}/></FG>
+                        <FG label="Hasta"><input type="date" className="inp" value={ausForm.fecha_fin} onChange={e=>setAusForm({...ausForm,fecha_fin:e.target.value})}/></FG>
+                      </div>
+                      <FG label="Motivo (opcional)"><input className="inp" value={ausForm.motivo} onChange={e=>setAusForm({...ausForm,motivo:e.target.value})} placeholder="Vacaciones, baja, etc."/></FG>
+                      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                        <button className="btn-sec" style={{fontSize:12}} onClick={()=>setShowAusForm(false)}>Cancelar</button>
+                        <button className="btn-gold" style={{fontSize:12}} onClick={addAusencia} disabled={saving}>{saving?"Guardando...":"Guardar ausencia"}</button>
+                      </div>
+                    </div>
+                  )}
+                  {ausencias.filter(a=>a.personal_id===form.id).length===0?(
+                    <div style={{fontSize:12,color:B.muted,fontStyle:"italic"}}>Sin ausencias registradas</div>
+                  ):ausencias.filter(a=>a.personal_id===form.id).map(a=>(
+                    <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${B.border}`}}>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:600,color:B.text}}>{a.fecha_inicio===a.fecha_fin?a.fecha_inicio:`${a.fecha_inicio} → ${a.fecha_fin}`}</div>
+                        {a.motivo&&<div style={{fontSize:11,color:B.muted}}>{a.motivo}</div>}
+                      </div>
+                      <button onClick={()=>delAusencia(a.id)} style={{border:"none",background:"transparent",cursor:"pointer",color:"#B91C1C",fontSize:14,padding:"2px 6px"}}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"space-between"}}>
                 <div>{modal==="p_e"&&<button className="btn-danger" onClick={()=>delP(form.id)}>🗑</button>}</div>
                 <div style={{display:"flex",gap:10}}><button className="btn-sec" onClick={()=>setModal(null)}>Cancelar</button><button className="btn-gold" onClick={saveP} disabled={saving}>{saving?"Guardando...":"Guardar"}</button></div>

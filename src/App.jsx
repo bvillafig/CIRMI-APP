@@ -195,6 +195,8 @@ export default function App(){
   const[guardHosp,setGuardHosp]=useState(null);
   const[loading,setLoading]=useState(true);
   const[saving,setSaving]=useState(false);
+  const[showBusqueda,setShowBusqueda]=useState(false);
+  const[queryBusq,setQueryBusq]=useState("");
   const[uploading,setUploading]=useState(false);
   const fileRef=useRef();
 
@@ -353,6 +355,7 @@ export default function App(){
   const aprobarU=async(id)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const bloquearU=async(id)=>{if(!confirm("¿Bloquear?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const hacerAdmin=async(id)=>{if(!confirm("¿Dar permisos de admin?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol:"admin",rol_app:"admin"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+  const cambiarRolApp=async(id,rolApp)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol_app:rolApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};;
 
   // ── Stats ──
   const pendFact=cirugias.filter(c=>c.factura==="Pendiente").length;
@@ -365,6 +368,7 @@ export default function App(){
 
   // ── TABS config ──
   const TABS=[
+    ["inicio","🏠","Inicio"],
     ["agenda","📅","Agenda"],
     ["programacion","👨‍⚕️","Programa"],
     ["guardias","🛡️","Guardias"],
@@ -461,6 +465,8 @@ export default function App(){
 
           {/* Right actions */}
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {/* Búsqueda */}
+            <button onClick={()=>{setShowBusqueda(true);setQueryBusq("");}} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:16}}>🔍</button>
             {/* Notificaciones */}
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowNotifs(!showNotifs)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:16,position:"relative"}}>
@@ -536,6 +542,77 @@ export default function App(){
         </div>
 
         {loading?<Spin/>:(<>
+
+          {/* ══ INICIO ══ */}
+          {tab==="inicio"&&(()=>{
+            const miNombre=perfil?.nombre||"";
+            const saludo=(new Date().getHours()<14?"Buenos días":"Buenas tardes");
+            const misCx=cirugias.filter(c=>c.fecha>=todayStr&&(c.cirujano===miNombre||c.ayudante===miNombre||c.enfermera===miNombre)).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.inicio.localeCompare(b.inicio));
+            const misGuard=guardias.filter(g=>g.fecha>=todayStr&&(g.cirujano_principal===miNombre||g.cirujano_ayudante===miNombre)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+            const hoyMisCx=misCx.filter(c=>c.fecha===todayStr);
+            const semMisCx=misCx.filter(c=>{const d=new Date(c.fecha);const s=new Date(todayStr);const e=new Date(todayStr);e.setDate(e.getDate()+7);return d>=s&&d<=e;});
+            return(
+              <div>
+                {/* Saludo */}
+                <div style={{background:`linear-gradient(135deg,${B.slateDark},${B.slate})`,borderRadius:16,padding:mob?"18px 20px":"22px 28px",marginBottom:20,color:"white"}}>
+                  <div style={{fontSize:mob?18:22,fontWeight:700,marginBottom:4}}>{saludo}, {miNombre.split(" ")[0]||"Doctor"} 👋</div>
+                  <div style={{fontSize:13,opacity:.75}}>
+                    {hoyMisCx.length>0?`Tienes ${hoyMisCx.length} cirugía${hoyMisCx.length>1?"s":""} hoy`:"Sin cirugías hoy"}
+                    {semMisCx.length>0&&` · ${semMisCx.length} esta semana`}
+                  </div>
+                </div>
+
+                {/* Stats personales */}
+                <div style={{display:"grid",gridTemplateColumns:mob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                  {[{label:"Hoy",value:hoyMisCx.length,icon:"🔪",accent:B.slate},{label:"Esta semana",value:semMisCx.length,icon:"📅",accent:B.slateLight},{label:"Total próximas",value:misCx.length,icon:"📊",accent:B.slateDark},{label:"Guardias",value:misGuard.length,icon:"🛡️",accent:"#3D6B8C"}].map(s=>(
+                    <div key={s.label} className="stat-card" style={{borderLeft:`4px solid ${s.accent}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                        <div><div style={{fontSize:mob?22:26,fontWeight:700,color:s.accent,lineHeight:1}}>{s.value}</div><div style={{fontSize:11,color:B.muted,marginTop:3}}>{s.label}</div></div>
+                        <span style={{fontSize:mob?16:18}}>{s.icon}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"repeat(2,1fr)",gap:16}}>
+                  {/* Mis próximas cirugías */}
+                  <div className="card" style={{overflow:"hidden"}}>
+                    <div style={{padding:"12px 16px",borderBottom:`1px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontWeight:700,fontSize:14,color:B.slateDark}}>🔪 Mis próximas cirugías</div>
+                      <button className="btn-sec" style={{padding:"3px 9px",fontSize:11}} onClick={()=>setTab("agenda")}>Ver agenda →</button>
+                    </div>
+                    {misCx.length===0?<div style={{padding:"24px",textAlign:"center",color:B.muted,fontSize:13}}>Sin cirugías próximas</div>:misCx.slice(0,5).map(c=>(
+                      <div key={c.id} style={{padding:"10px 16px",borderBottom:`1px solid ${B.border}`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                          <div>
+                            <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:B.slate,fontWeight:600}}>{c.fecha} · {c.inicio}–{c.fin}</div>
+                            <div style={{fontWeight:600,fontSize:13,marginTop:1}}>{c.tipo}</div>
+                            <div style={{fontSize:11,color:B.muted}}>{c.hospital} · {c.cirujano===miNombre?"Principal":"Ayudante"}</div>
+                          </div>
+                          <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Mis guardias */}
+                  <div className="card" style={{overflow:"hidden"}}>
+                    <div style={{padding:"12px 16px",borderBottom:`1px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontWeight:700,fontSize:14,color:B.slateDark}}>🛡️ Mis guardias próximas</div>
+                      <button className="btn-sec" style={{padding:"3px 9px",fontSize:11}} onClick={()=>setTab("guardias")}>Ver guardias →</button>
+                    </div>
+                    {misGuard.length===0?<div style={{padding:"24px",textAlign:"center",color:B.muted,fontSize:13}}>Sin guardias próximas</div>:misGuard.slice(0,5).map(g=>(
+                      <div key={g.id} style={{padding:"10px 16px",borderBottom:`1px solid ${B.border}`}}>
+                        <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:B.slate,fontWeight:600}}>{g.fecha}</div>
+                        <div style={{fontWeight:600,fontSize:13,marginTop:1}}>{g.hospital}</div>
+                        <div style={{fontSize:11,color:B.muted}}>{g.cirujano_principal===miNombre?"Principal":"Ayudante"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ══ AGENDA ══ */}
           {tab==="agenda"&&(
@@ -1056,17 +1133,38 @@ export default function App(){
                     return(<div key={estado} style={{marginBottom:18}}>
                       <div style={{fontSize:13,fontWeight:700,color:colors[estado],marginBottom:8}}>{labels[estado]} ({grupo.length})</div>
                       {grupo.map(u=>(
-                        <div key={u.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",background:"white",border:`1.5px solid ${estado==="pendiente"?B.gold:B.border}`,borderRadius:11,marginBottom:6,gap:10,flexWrap:"wrap"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div className="avatar" style={{background:estado==="pendiente"?B.goldDark:estado==="aprobado"?B.slate:"#B91C1C",width:36,height:36,fontSize:13}}>{(u.nombre||u.email||"?")[0].toUpperCase()}</div>
-                            <div><div style={{fontWeight:700,fontSize:13}}>{u.nombre||"Sin nombre"}</div><div style={{fontSize:12,color:B.muted}}>{u.email}</div>{u.rol==="admin"&&<span style={{background:B.goldLight,color:B.goldDark,borderRadius:8,padding:"1px 6px",fontSize:10,fontWeight:700}}>ADMIN</span>}</div>
+                        <div key={u.id} style={{padding:"11px 14px",background:"white",border:`1.5px solid ${estado==="pendiente"?B.gold:B.border}`,borderRadius:11,marginBottom:6}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10}}>
+                              <div className="avatar" style={{background:estado==="pendiente"?B.goldDark:estado==="aprobado"?B.slate:"#B91C1C",width:36,height:36,fontSize:13}}>{(u.nombre||u.email||"?")[0].toUpperCase()}</div>
+                              <div>
+                                <div style={{fontWeight:700,fontSize:13}}>{u.nombre||"Sin nombre"}</div>
+                                <div style={{fontSize:12,color:B.muted}}>{u.email}</div>
+                                {u.rol==="admin"&&<span style={{background:B.goldLight,color:B.goldDark,borderRadius:8,padding:"1px 6px",fontSize:10,fontWeight:700}}>ADMIN</span>}
+                              </div>
+                            </div>
+                            <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                              {estado==="pendiente"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>✓ Aprobar</button>}
+                              {estado==="aprobado"&&u.id!==authUser?.id&&u.rol!=="admin"&&<button className="btn-sec" style={{padding:"4px 9px",fontSize:12}} onClick={()=>hacerAdmin(u.id)}>👑 Admin</button>}
+                              {u.id!==authUser?.id&&estado!=="bloqueado"&&<button className="btn-sm-danger" onClick={()=>bloquearU(u.id)}>Bloquear</button>}
+                              {estado==="bloqueado"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>Reactivar</button>}
+                            </div>
                           </div>
-                          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                            {estado==="pendiente"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>✓ Aprobar</button>}
-                            {estado==="aprobado"&&u.id!==authUser?.id&&u.rol!=="admin"&&<button className="btn-sec" style={{padding:"4px 9px",fontSize:12}} onClick={()=>hacerAdmin(u.id)}>👑 Admin</button>}
-                            {u.id!==authUser?.id&&estado!=="bloqueado"&&<button className="btn-sm-danger" onClick={()=>bloquearU(u.id)}>Bloquear</button>}
-                            {estado==="bloqueado"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>Reactivar</button>}
-                          </div>
+                          {/* Selector de rol — solo usuarios aprobados no admin */}
+                          {estado==="aprobado"&&u.rol!=="admin"&&(
+                            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${B.border}`,display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:11,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.5}}>Rol</span>
+                              <select className="inp" style={{flex:1,maxWidth:220,padding:"5px 8px",fontSize:12}}
+                                value={u.rol_app||""}
+                                onChange={e=>cambiarRolApp(u.id,e.target.value)}>
+                                <option value="">— Sin asignar —</option>
+                                <option value="cirujano_principal">Cirujano Principal</option>
+                                <option value="cirujano">Cirujano</option>
+                                <option value="enfermero">Enf. Instrumentista</option>
+                              </select>
+                              {u.rol_app&&<span style={{fontSize:11,color:"#2E7D52",fontWeight:600}}>✓ Asignado</span>}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>);
@@ -1192,6 +1290,78 @@ export default function App(){
               </div>
             </>)}
 
+          </div>
+        </div>
+      )}
+
+      {/* ══ BÚSQUEDA GLOBAL ══ */}
+      {showBusqueda&&(
+        <div onClick={()=>setShowBusqueda(false)} style={{position:"fixed",inset:0,background:"rgba(28,43,58,.6)",backdropFilter:"blur(3px)",zIndex:9000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:72}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:16,width:"92%",maxWidth:580,maxHeight:"72vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,.28)"}}>
+            {/* Input */}
+            <div style={{padding:"14px 16px",borderBottom:`1px solid ${B.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:17,color:B.muted,lineHeight:1}}>🔍</span>
+              <input autoFocus placeholder="Buscar cirugías, personal, documentos…" value={queryBusq} onChange={e=>setQueryBusq(e.target.value)} onKeyDown={e=>e.key==="Escape"&&setShowBusqueda(false)} style={{flex:1,border:"none",outline:"none",fontSize:14,color:B.text,background:"transparent"}}/>
+              {queryBusq&&<button onClick={()=>setQueryBusq("")} style={{border:"none",background:"transparent",cursor:"pointer",color:B.muted,fontSize:16,lineHeight:1,padding:2}}>✕</button>}
+              <button onClick={()=>setShowBusqueda(false)} style={{border:"none",background:B.bg,borderRadius:6,padding:"4px 10px",fontSize:12,color:B.muted,cursor:"pointer",flexShrink:0}}>Esc</button>
+            </div>
+            {/* Results */}
+            <div style={{overflowY:"auto",flex:1,padding:"10px 8px"}}>
+              {queryBusq.trim().length<2?(
+                <div style={{textAlign:"center",color:B.muted,fontSize:13,padding:"32px 0"}}>Escribe al menos 2 caracteres para buscar</div>
+              ):(()=>{
+                const q=queryBusq.trim().toLowerCase();
+                const hi=(txt)=>{if(!txt)return"";const i=txt.toLowerCase().indexOf(q);if(i<0)return txt;return<>{txt.slice(0,i)}<mark style={{background:B.goldLight,borderRadius:2,padding:"0 1px"}}>{txt.slice(i,i+q.length)}</mark>{txt.slice(i+q.length)}</>;};
+                const resCx=cirugias.filter(c=>[c.tipo_cirugia,c.paciente,c.cirujano,c.ayudante,c.enfermera,c.hospital,c.estado].some(v=>v&&v.toLowerCase().includes(q))).slice(0,6);
+                const resPers=personal.filter(p=>[p.nombre,p.rol].some(v=>v&&v.toLowerCase().includes(q))).slice(0,5);
+                const resDocs=documentos.filter(d=>[d.nombre,d.descripcion,d.categoria].some(v=>v&&v.toLowerCase().includes(q))).slice(0,5);
+                const total=resCx.length+resPers.length+resDocs.length;
+                if(total===0)return<div style={{textAlign:"center",color:B.muted,fontSize:13,padding:"32px 0"}}>Sin resultados para «{queryBusq.trim()}»</div>;
+                const Row=({icon,iconBg,title,sub,badge,onClick})=>(
+                  <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:8,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background=B.bg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <div style={{width:34,height:34,borderRadius:8,background:iconBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{icon}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:600,fontSize:13,color:B.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title}</div>
+                      <div style={{fontSize:11,color:B.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub}</div>
+                    </div>
+                    {badge&&<div style={{flexShrink:0}}>{badge}</div>}
+                  </div>
+                );
+                const SecH=({label,n})=><div style={{fontSize:10,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.9,padding:"8px 10px 4px"}}>{label} <span style={{fontWeight:500,opacity:.7}}>({n})</span></div>;
+                return(<>
+                  {resCx.length>0&&(<div style={{marginBottom:6}}>
+                    <SecH label="Cirugías" n={resCx.length}/>
+                    {resCx.map(c=>(
+                      <Row key={c.id} icon="🏥" iconBg={bEst(c.estado)}
+                        title={<>{hi(c.tipo_cirugia||"Sin tipo")} — {hi(c.paciente||"Sin paciente")}</>}
+                        sub={`${c.fecha} · ${c.hospital||""} · ${c.cirujano||""}`}
+                        badge={<Bdg label={c.estado||"?"} bg={bEst(c.estado)} color={ceColor(c.estado)}/>}
+                        onClick={()=>{setTab("agenda");setSelDate(c.fecha);setShowBusqueda(false);}}/>
+                    ))}
+                  </div>)}
+                  {resPers.length>0&&(<div style={{marginBottom:6}}>
+                    <SecH label="Personal" n={resPers.length}/>
+                    {resPers.map(p=>(
+                      <Row key={p.id}
+                        icon={<span style={{color:"white",fontWeight:700,fontSize:12}}>{(p.nombre||"?")[0]}</span>}
+                        iconBg={p.color||B.slate}
+                        title={hi(p.nombre||"")}
+                        sub={hi(p.rol||"")}
+                        onClick={()=>{setTab("personal");setShowBusqueda(false);}}/>
+                    ))}
+                  </div>)}
+                  {resDocs.length>0&&(<div style={{marginBottom:4}}>
+                    <SecH label="Documentos" n={resDocs.length}/>
+                    {resDocs.map(d=>(
+                      <Row key={d.id} icon="📄" iconBg="#E8EDF2"
+                        title={hi(d.nombre||"")}
+                        sub={`${d.categoria||""} · ${d.descripcion?.slice(0,55)||""}`}
+                        onClick={()=>{setTab("documentos");setShowBusqueda(false);}}/>
+                    ))}
+                  </div>)}
+                </>);
+              })()}
+            </div>
           </div>
         </div>
       )}

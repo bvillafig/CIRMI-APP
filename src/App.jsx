@@ -197,6 +197,10 @@ export default function App(){
   const[saving,setSaving]=useState(false);
   const[showBusqueda,setShowBusqueda]=useState(false);
   const[queryBusq,setQueryBusq]=useState("");
+  const[agendaVista,setAgendaVista]=useState("mes");
+  const[agFiltHosp,setAgFiltHosp]=useState("Todos");
+  const[agFiltEst,setAgFiltEst]=useState("Todos");
+  const[auditoria,setAuditoria]=useState([]);
   const[uploading,setUploading]=useState(false);
   const fileRef=useRef();
 
@@ -227,7 +231,7 @@ export default function App(){
   const loadAll=async()=>{
     setLoading(true);
     try{
-      const[c,p,h,g,s,d,n,qe,ce]=await Promise.all([
+      const[c,p,h,g,s,d,n,qe,ce,au]=await Promise.all([
         dbGet("cirugias","order=fecha.asc,inicio.asc"),
         dbGet("personal","order=nombre.asc&activo=eq.true"),
         dbGet("hospitales","order=nombre.asc&activo=eq.true"),
@@ -237,8 +241,9 @@ export default function App(){
         dbGet("notificaciones",`usuario_id=eq.${authUser?.id}&order=created_at.desc&limit=20`),
         dbGet("quirofanos_estado","order=fecha.asc"),
         dbGet("consultas_estado","order=fecha.asc"),
+        dbGet("auditoria","order=created_at.desc&limit=300",session),
       ]);
-      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);setQuirEstados(qe);setConsEstados(ce);
+      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);setQuirEstados(qe);setConsEstados(ce);setAuditoria(au||[]);
       if(h.length>0&&!guardHosp)setGuardHosp(h[0].nombre);
       if(h.length>0&&!quirHosp)setQuirHosp(h[0].nombre);
       if(h.length>0&&!consHosp)setConsHosp(h[0].nombre);
@@ -254,11 +259,13 @@ export default function App(){
   const markRead=async(id)=>{try{await dbUpdate("notificaciones",id,{leida:true},session);setNotifs(n=>n.map(x=>x.id===id?{...x,leida:true}:x));}catch{}};
   const markAllRead=async()=>{try{await Promise.all(notifs.filter(n=>!n.leida).map(n=>dbUpdate("notificaciones",n.id,{leida:true},session)));setNotifs(n=>n.map(x=>({...x,leida:true})));}catch{}};
   const createNotif=async(uid,msg)=>{try{await dbInsert("notificaciones",{usuario_id:uid,mensaje:msg},session);}catch{}};
+  const logAudit=async(tabla,registro_id,accion,cambios)=>{try{await dbInsert("auditoria",{tabla,registro_id,accion,cambios,usuario_nombre:perfil?.nombre||perfil?.email||"",usuario_id:authUser?.id},session);}catch{}};
 
   // ── Cirugías ──
   const openNewCx=(fecha=selDate)=>{setForm({id:newId(),fecha,hospital:hospNames[0]||"",quirofano:"Q-1",tipo:"",cirujano:personal[0]?.nombre||"",ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});setModal("cx_n");};
-  const saveCx=async()=>{setSaving(true);try{if(modal==="cx_n")await dbInsert("cirugias",form);else{const{id,...d}=form;await dbUpdate("cirugias",id,d);}await loadAll();setModal(null);}catch{alert("Error al guardar.");}finally{setSaving(false);};};
-  const delCx=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("cirugias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
+  const saveCx=async()=>{setSaving(true);try{if(modal==="cx_n"){await dbInsert("cirugias",form);await logAudit("cirugias",form.id,"insert",{tipo:form.tipo,fecha:form.fecha,hospital:form.hospital});}else{const prev=cirugias.find(c=>c.id===form.id);const{id,...d}=form;await dbUpdate("cirugias",id,d);if(prev){const ch={};["tipo","fecha","inicio","fin","hospital","cirujano","ayudante","enfermera","paciente","estado","factura","obs","quirofano"].forEach(k=>{if(String(prev[k]||"")!==String(form[k]||""))ch[k]={de:prev[k]||"",a:form[k]||""};});if(Object.keys(ch).length>0)await logAudit("cirugias",id,"update",ch);}}await loadAll();setModal(null);}catch{alert("Error al guardar.");}finally{setSaving(false);};};
+  const delCx=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await logAudit("cirugias",id,"delete",{});await dbDelete("cirugias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
+  const duplicarCx=()=>{setForm({...form,id:newId(),fecha:selDate,estado:"Confirmada",factura:"Pendiente"});setModal("cx_n");};
   const updFact=async(id,v)=>{try{await dbUpdate("cirugias",id,{factura:v});setCirugias(p=>p.map(c=>c.id===id?{...c,factura:v}:c));}catch{alert("Error.");}};
 
   // ── Guardias ──
@@ -357,11 +364,22 @@ export default function App(){
   const hacerAdmin=async(id)=>{if(!confirm("¿Dar permisos de admin?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol:"admin",rol_app:"admin"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const cambiarRolApp=async(id,rolApp)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol_app:rolApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};;
 
+  // ── Export PDF semana ──
+  const exportarSemana=()=>{
+    const sd=new Date(selDate+'T12:00:00');const dow=sd.getDay();const monOff=(dow===0)?-6:1-dow;const mon=new Date(sd);mon.setDate(mon.getDate()+monOff);
+    const wDates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return fmt(d);});
+    const cxW=cirugias.filter(c=>wDates.includes(c.fecha)&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst)).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.inicio.localeCompare(b.inicio));
+    const rows=cxW.map(c=>`<tr><td>${c.fecha}</td><td>${DIAS_H[(new Date(c.fecha+'T12:00:00').getDay()+6)%7]}</td><td>${c.inicio||""}–${c.fin||""}</td><td>${c.tipo||""}</td><td>${c.paciente||""}</td><td>${c.cirujano||""}</td><td>${c.ayudante||""}</td><td>${c.hospital||""}</td><td>${c.estado||""}</td></tr>`).join("");
+    const html=`<!DOCTYPE html><html><head><title>CIRMI – Semana ${wDates[0]}</title><style>body{font-family:Arial,sans-serif;font-size:12px;color:#1C2B3A;margin:20px}h1{font-size:16px;margin-bottom:4px;color:#2E3F52}h2{font-size:12px;font-weight:normal;color:#7A90A4;margin-bottom:18px}table{width:100%;border-collapse:collapse}th{background:#4A6079;color:white;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}td{padding:6px 8px;border-bottom:1px solid #DDE4EB;font-size:11px}tr:nth-child(even)td{background:#F2F5F8}footer{margin-top:20px;font-size:10px;color:#7A90A4}@media print{body{margin:0}button{display:none}}</style></head><body><h1>CIRMI — Parte semanal</h1><h2>Semana del ${wDates[0]} al ${wDates[6]}${agFiltHosp!=="Todos"?" · "+agFiltHosp:""}${agFiltEst!=="Todos"?" · "+agFiltEst:""} · ${cxW.length} intervención${cxW.length!==1?"es":""}</h2>${rows.length?`<table><thead><tr><th>Fecha</th><th>Día</th><th>Hora</th><th>Tipo</th><th>Paciente</th><th>Cirujano</th><th>Ayudante</th><th>Hospital</th><th>Estado</th></tr></thead><tbody>${rows}</tbody></table>`:"<p style='color:#7A90A4;text-align:center;padding:30px'>Sin cirugías en esta semana</p>"}<footer>Generado ${new Date().toLocaleString("es-ES")} · CIRMI Gestión Quirúrgica</footer><script>window.onload=function(){window.print()}<\/script></body></html>`;
+    const w=window.open("","_blank","width=1100,height=720");if(w){w.document.write(html);w.document.close();}
+  };
+
   // ── Stats ──
   const pendFact=cirugias.filter(c=>c.factura==="Pendiente").length;
   const hoyN=cirugias.filter(c=>c.fecha===todayStr).length;
   const mesN=cirugias.filter(c=>{const d=new Date(c.fecha);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear();}).length;
   const cxDia=cirugias.filter(c=>c.fecha===selDate);
+  const cxDiaFilt=cxDia.filter(c=>(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst));
   const sugPend=sugerencias.filter(s=>s.estado==="pendiente");
   const cxProg=cirugias.filter(c=>(filtCir==="Todos"||c.cirujano===filtCir||c.ayudante===filtCir)&&(filtCli==="Todos"||c.hospital===filtCli)).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.inicio.localeCompare(b.inicio));
   const docsFilt=documentos.filter(d=>filtCat==="Todos"||d.categoria===filtCat);
@@ -617,50 +635,131 @@ export default function App(){
           {/* ══ AGENDA ══ */}
           {tab==="agenda"&&(
             <div>
-              <CalMes year={calY} month={calM}
-                onPrev={()=>prevM(calY,calM,setCalY,setCalM)}
-                onNext={()=>nextM(calY,calM,setCalY,setCalM)}
-                onToday={()=>{setCalY(today.getFullYear());setCalM(today.getMonth());setSelDate(todayStr);}}
-                renderDay={({day,dateStr,isToday,isWeekend,col})=>{
-                  const dc=cirugias.filter(c=>c.fecha===dateStr),isSel=dateStr===selDate;
-                  const porClinica=hospitales.map((h,idx)=>({nombre:h.nombre,color:ACCENTS[idx%ACCENTS.length],n:dc.filter(c=>c.hospital===h.nombre).length})).filter(x=>x.n>0);
-                  return(<div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isWeekend?"#FAFBFC":"white"}} onClick={()=>setSelDate(dateStr)}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                      <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday&&!isSel?B.gold:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
-                    </div>
-                    {porClinica.length>0&&(
-                      <div style={{display:"flex",flexWrap:"wrap",gap:2}}>
-                        {porClinica.map(({nombre,color,n})=>(
-                          <div key={nombre} title={nombre} style={{background:isSel?"rgba(255,255,255,.28)":color,color:"white",borderRadius:5,padding:"2px 5px",fontSize:10,fontWeight:700,lineHeight:1.2}}>{n}</div>
-                        ))}
-                      </div>
-                    )}
-                    {isSel&&canCreate&&<button onClick={e=>{e.stopPropagation();openNewCx(dateStr);}} style={{position:"absolute",bottom:3,right:3,background:B.gold,border:"none",borderRadius:4,width:16,height:16,fontSize:11,fontWeight:700,color:B.slateDark,cursor:"pointer"}}>+</button>}
-                  </div>);
-                }}
-              />
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                <h3 style={{fontSize:16,fontWeight:700,color:B.slateDark}}>{selDate===todayStr?"Hoy":selDate} <span style={{fontSize:13,fontWeight:400,color:B.muted}}>({cxDia.length})</span></h3>
-                {canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{padding:"7px 12px",fontSize:12}}>+ Añadir</button>}
-              </div>
-              {cxDia.length===0?<div className="card" style={{padding:32,textAlign:"center",color:B.muted}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Sin cirugías</div>{canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{marginTop:12}}>+ Añadir</button>}</div>
-              :cxDia.sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(c=>(
-                <div key={c.id} className="card" style={{padding:"12px 14px",marginBottom:8,cursor:canCreate?"pointer":"default"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}>
-                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <span style={{fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:600,color:B.slateDark}}>{c.inicio}–{c.fin}</span>
-                        <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
-                      </div>
-                      <div style={{fontWeight:700,fontSize:14}}>{c.tipo}</div>
-                      <div style={{fontSize:12,color:B.muted,marginTop:3}}>{c.hospital} · {c.quirofano}</div>
-                      <div style={{fontSize:12,color:B.muted}}>🔪 {c.cirujano}{c.ayudante&&` · 🤝 ${c.ayudante}`}</div>
-                      {c.obs&&<div style={{fontSize:11,color:B.goldDark,marginTop:2}}>⚠ {c.obs}</div>}
-                    </div>
-                    <Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/>
-                  </div>
+              {/* Toolbar */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+                <div style={{display:"flex",gap:3,background:B.bg,borderRadius:9,padding:3}}>
+                  {[["mes","Mes"],["semana","Semana"]].map(([v,l])=>(
+                    <button key={v} onClick={()=>setAgendaVista(v)} style={{padding:"6px 14px",border:"none",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",background:agendaVista===v?"white":B.bg,color:agendaVista===v?B.slateDark:B.muted,boxShadow:agendaVista===v?"0 1px 3px rgba(0,0,0,.08)":"none",transition:"all .15s"}}>{l}</button>
+                  ))}
                 </div>
-              ))}
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                  <select className="inp" style={{width:mob?"100%":160,padding:"6px 10px",fontSize:12}} value={agFiltHosp} onChange={e=>setAgFiltHosp(e.target.value)}>
+                    <option value="Todos">Todos los hospitales</option>
+                    {hospNames.map(h=><option key={h}>{h}</option>)}
+                  </select>
+                  <select className="inp" style={{width:mob?"100%":130,padding:"6px 10px",fontSize:12}} value={agFiltEst} onChange={e=>setAgFiltEst(e.target.value)}>
+                    <option value="Todos">Todos los estados</option>
+                    {ESTADOS_CX.map(e=><option key={e}>{e}</option>)}
+                  </select>
+                  <button className="btn-sec" onClick={exportarSemana} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📄 PDF semana</button>
+                </div>
+              </div>
+
+              {agendaVista==="mes"?(
+                <>
+                  <CalMes year={calY} month={calM}
+                    onPrev={()=>prevM(calY,calM,setCalY,setCalM)}
+                    onNext={()=>nextM(calY,calM,setCalY,setCalM)}
+                    onToday={()=>{setCalY(today.getFullYear());setCalM(today.getMonth());setSelDate(todayStr);}}
+                    renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                      const dc=cirugias.filter(c=>c.fecha===dateStr),isSel=dateStr===selDate;
+                      const porClinica=hospitales.map((h,idx)=>({nombre:h.nombre,color:ACCENTS[idx%ACCENTS.length],n:dc.filter(c=>c.hospital===h.nombre).length})).filter(x=>x.n>0);
+                      return(<div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isWeekend?"#FAFBFC":"white"}} onClick={()=>setSelDate(dateStr)}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday&&!isSel?B.gold:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                        </div>
+                        {porClinica.length>0&&(
+                          <div style={{display:"flex",flexWrap:"wrap",gap:2}}>
+                            {porClinica.map(({nombre,color,n})=>(
+                              <div key={nombre} title={nombre} style={{background:isSel?"rgba(255,255,255,.28)":color,color:"white",borderRadius:5,padding:"2px 5px",fontSize:10,fontWeight:700,lineHeight:1.2}}>{n}</div>
+                            ))}
+                          </div>
+                        )}
+                        {isSel&&canCreate&&<button onClick={e=>{e.stopPropagation();openNewCx(dateStr);}} style={{position:"absolute",bottom:3,right:3,background:B.gold,border:"none",borderRadius:4,width:16,height:16,fontSize:11,fontWeight:700,color:B.slateDark,cursor:"pointer"}}>+</button>}
+                      </div>);
+                    }}
+                  />
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                    <h3 style={{fontSize:16,fontWeight:700,color:B.slateDark}}>{selDate===todayStr?"Hoy":selDate} <span style={{fontSize:13,fontWeight:400,color:B.muted}}>({cxDiaFilt.length}{cxDiaFilt.length!==cxDia.length?` de ${cxDia.length}`:""})</span></h3>
+                    {canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{padding:"7px 12px",fontSize:12}}>+ Añadir</button>}
+                  </div>
+                  {cxDiaFilt.length===0?(<div className="card" style={{padding:32,textAlign:"center",color:B.muted}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>{cxDia.length>0?"Sin resultados con estos filtros":"Sin cirugías"}</div>{canCreate&&cxDia.length===0&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{marginTop:12}}>+ Añadir</button>}</div>)
+                  :cxDiaFilt.sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(c=>(
+                    <div key={c.id} className="card" style={{padding:"12px 14px",marginBottom:8,cursor:canCreate?"pointer":"default"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}>
+                      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                        <div style={{flex:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                            <span style={{fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:600,color:B.slateDark}}>{c.inicio}–{c.fin}</span>
+                            <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
+                          </div>
+                          <div style={{fontWeight:700,fontSize:14}}>{c.tipo}</div>
+                          <div style={{fontSize:12,color:B.muted,marginTop:3}}>{c.hospital} · {c.quirofano}</div>
+                          <div style={{fontSize:12,color:B.muted}}>🔪 {c.cirujano}{c.ayudante&&` · 🤝 ${c.ayudante}`}</div>
+                          {c.obs&&<div style={{fontSize:11,color:B.goldDark,marginTop:2}}>⚠ {c.obs}</div>}
+                        </div>
+                        <Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ):(()=>{
+                const sd2=new Date(selDate+'T12:00:00');const dow2=sd2.getDay();const mo=(dow2===0)?-6:1-dow2;const mon2=new Date(sd2);mon2.setDate(mon2.getDate()+mo);
+                const wDates=Array.from({length:7},(_,i)=>{const d=new Date(mon2);d.setDate(d.getDate()+i);return fmt(d);});
+                return(
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                      <div style={{fontWeight:700,fontSize:14,color:B.slateDark}}>{wDates[0]} — {wDates[6]}</div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button className="btn-sec" style={{padding:"5px 10px",fontSize:12}} onClick={()=>{const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()-7);setSelDate(fmt(d));}}>←</button>
+                        <button className="btn-sec" style={{padding:"5px 10px",fontSize:12}} onClick={()=>setSelDate(todayStr)}>Hoy</button>
+                        <button className="btn-sec" style={{padding:"5px 10px",fontSize:12}} onClick={()=>{const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()+7);setSelDate(fmt(d));}}>→</button>
+                      </div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:mob?"repeat(7,1fr)":"repeat(7,1fr)",gap:mob?3:8,marginBottom:20}}>
+                      {wDates.map((ds,i)=>{
+                        const isT=ds===todayStr,isSel=ds===selDate;
+                        const cxDay=cirugias.filter(c=>c.fecha===ds&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst));
+                        return(
+                          <div key={ds} onClick={()=>setSelDate(ds)} style={{background:isSel?"#EEF2F8":"white",borderRadius:10,border:`1.5px solid ${isT?B.gold:isSel?B.slate:B.border}`,padding:mob?"5px 4px":"8px 6px",cursor:"pointer",transition:"all .15s",minHeight:mob?52:88}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                              <div style={{fontSize:mob?8:9,fontWeight:700,color:B.muted,textTransform:"uppercase"}}>{DIAS_H[i]}</div>
+                              <div style={{width:mob?16:20,height:mob?16:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isT?B.gold:"transparent",color:isT?B.slateDark:B.text,fontWeight:isT?700:500,fontSize:mob?10:12}}>{new Date(ds+'T12:00:00').getDate()}</div>
+                            </div>
+                            {!mob&&cxDay.sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(c=>(
+                              <div key={c.id} onClick={e=>{e.stopPropagation();if(canCreate){setForm({...c});setModal("cx_e");}}} style={{background:bEst(c.estado),borderRadius:5,padding:"3px 5px",marginBottom:3,fontSize:9,fontWeight:600,color:ceColor(c.estado),cursor:canCreate?"pointer":"default",lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                {c.inicio} {c.tipo?.slice(0,12)||"—"}
+                              </div>
+                            ))}
+                            {mob&&cxDay.length>0&&<div style={{width:18,height:18,borderRadius:"50%",background:B.slate,color:"white",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{cxDay.length}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                      <h3 style={{fontSize:16,fontWeight:700,color:B.slateDark}}>{selDate===todayStr?"Hoy":selDate} <span style={{fontSize:13,fontWeight:400,color:B.muted}}>({cxDiaFilt.length})</span></h3>
+                      {canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{padding:"7px 12px",fontSize:12}}>+ Añadir</button>}
+                    </div>
+                    {cxDiaFilt.length===0?(<div className="card" style={{padding:32,textAlign:"center",color:B.muted}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>{cxDia.length>0?"Sin resultados con estos filtros":"Sin cirugías"}</div>{canCreate&&cxDia.length===0&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{marginTop:12}}>+ Añadir</button>}</div>)
+                    :cxDiaFilt.sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(c=>(
+                      <div key={c.id} className="card" style={{padding:"12px 14px",marginBottom:8,cursor:canCreate?"pointer":"default"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}>
+                        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                              <span style={{fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:600,color:B.slateDark}}>{c.inicio}–{c.fin}</span>
+                              <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
+                            </div>
+                            <div style={{fontWeight:700,fontSize:14}}>{c.tipo}</div>
+                            <div style={{fontSize:12,color:B.muted,marginTop:3}}>{c.hospital} · {c.quirofano}</div>
+                            <div style={{fontSize:12,color:B.muted}}>🔪 {c.cirujano}{c.ayudante&&` · 🤝 ${c.ayudante}`}</div>
+                            {c.obs&&<div style={{fontSize:11,color:B.goldDark,marginTop:2}}>⚠ {c.obs}</div>}
+                          </div>
+                          <Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -1192,8 +1291,9 @@ export default function App(){
                 .map(([l,f])=><FG key={l} label={l}>{f}</FG>)}
               </div>
               <FG label="Observaciones" style={{marginTop:12}}><textarea className="inp" rows={2} value={form.obs||""} onChange={e=>setForm({...form,obs:e.target.value})} placeholder="Notas..." style={{resize:"vertical"}}/></FG>
+              {modal==="cx_e"&&(()=>{const hist=auditoria.filter(a=>a.registro_id===form.id).slice(0,6);return hist.length>0?(<div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${B.border}`}}><div style={{fontSize:10,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Historial de cambios</div>{hist.map((a,i)=><div key={i} style={{fontSize:11,color:B.muted,marginBottom:5,padding:"5px 8px",background:B.bg,borderRadius:6}}><span style={{color:B.slate,fontWeight:600}}>{a.usuario_nombre}</span> · {(a.created_at||"").slice(0,16).replace("T"," ")} · {a.accion==="insert"?"⊕ Creada":a.accion==="delete"?"✕ Eliminada":`✎ ${Object.keys(a.cambios||{}).join(", ")}`}</div>)}</div>):null;})()}
               <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"space-between"}}>
-                <div>{modal==="cx_e"&&<button className="btn-danger" onClick={()=>delCx(form.id)} disabled={saving}>🗑</button>}</div>
+                <div style={{display:"flex",gap:8}}>{modal==="cx_e"&&<button className="btn-danger" onClick={()=>delCx(form.id)} disabled={saving}>🗑</button>}{modal==="cx_e"&&<button className="btn-sec" onClick={duplicarCx} style={{fontSize:12}}>📋 Duplicar</button>}</div>
                 <div style={{display:"flex",gap:10}}><button className="btn-sec" onClick={()=>setModal(null)}>Cancelar</button><button className="btn-gold" onClick={saveCx} disabled={saving}>{saving?"Guardando...":modal==="cx_n"?"Crear":"Guardar"}</button></div>
               </div>
             </>)}

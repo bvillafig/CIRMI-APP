@@ -1080,22 +1080,23 @@ export default function App(){
                     const hasCerrado=salaInfos.some(x=>x.isClosed);
                     const hasCirugias=salaInfos.some(x=>x.isOpen&&x.ocupado);
                     const hasOpen=salaInfos.some(x=>x.isOpen);
-                    const openDots=salaInfos.filter(x=>x.isOpen);
-                    let dayBg=isWeekend?"#FAFBFC":"white";
-                    if(hasCerrado)dayBg="#FEF2F2";
-                    if(hasCirugias&&!hasCerrado)dayBg="#FFFBEB";
-                    if(hasOpen&&!hasCirugias&&!hasCerrado)dayBg="#F0FDF4";
+                    const asigDots=salaInfos.filter(x=>x.cirColor);
+                    let dayBg="white";
+                    if(hasCerrado)dayBg="#FCA5A5";
+                    if(hasCirugias&&!hasCerrado)dayBg="#FCD34D";
+                    if(hasOpen&&!hasCirugias&&!hasCerrado)dayBg="#86EFAC";
                     if(isToday&&!isSel)dayBg=B.goldLight;
                     if(isSel)dayBg=B.slateDark;
+                    const numColor=isSel?"white":hasCerrado?"#7F1D1D":hasCirugias?"#78350F":hasOpen?"#14532D":isToday?B.slateDark:isWeekend?B.muted:B.text;
                     return(
                       <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:dayBg}} onClick={()=>setSelDia(dateStr)}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:numColor,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
                         </div>
-                        {openDots.length>0&&(
+                        {asigDots.length>0&&(
                           <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
-                            {openDots.map(({s,ocupado,cirColor})=>(
-                              <div key={s} title={s} style={{width:mob?7:9,height:mob?7:9,borderRadius:3,background:isSel?"rgba(255,255,255,.55)":cirColor||(ocupado?"#D4A820":"#2E7D52"),flexShrink:0}}/>
+                            {asigDots.map(({s,cirColor})=>(
+                              <div key={s} title={s} style={{width:mob?7:9,height:mob?7:9,borderRadius:"50%",background:isSel?"rgba(255,255,255,.7)":cirColor,flexShrink:0,boxShadow:"0 0 0 1.5px rgba(0,0,0,.15)"}}/>
                             ))}
                           </div>
                         )}
@@ -1112,10 +1113,10 @@ export default function App(){
 
                 {/* Leyenda */}
                 <div style={{display:"flex",gap:14,marginBottom:12,flexWrap:"wrap"}}>
-                  {[["#F0FDF4","#166534","Abierto sin cirugías"],["#FFFBEB","#92400E","Abierto con cirugías"],["#FEF2F2","#B91C1C","Cerrado"]].map(([bg,col,l])=>(
-                    <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:14,borderRadius:4,background:bg,border:`1.5px solid ${col}33`}}/><span style={{fontSize:11,color:B.muted}}>{l}</span></div>
+                  {[["#86EFAC","#14532D","Abierto sin cirugías"],["#FCD34D","#78350F","Abierto con cirugías"],["#FCA5A5","#7F1D1D","Cerrado"]].map(([bg,col,l])=>(
+                    <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:14,borderRadius:4,background:bg}}/><span style={{fontSize:11,color:B.muted}}>{l}</span></div>
                   ))}
-                  <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:"50%",background:"#4A6079"}}/><span style={{fontSize:11,color:B.muted}}>Punto = color cirujano asignado</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:9,height:9,borderRadius:"50%",background:"#4A6079",boxShadow:"0 0 0 1.5px rgba(0,0,0,.2)"}}/><span style={{fontSize:11,color:B.muted}}>● cirujano asignado</span></div>
                 </div>
 
                 {/* Tabla salas × turno */}

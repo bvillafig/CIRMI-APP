@@ -273,6 +273,73 @@ export default function App(){
   const addAusencia=async()=>{if(!ausForm.fecha_inicio||!ausForm.fecha_fin||ausForm.fecha_fin<ausForm.fecha_inicio){alert("Fechas inválidas.");return;}setSaving(true);try{await dbInsert("ausencias",{personal_id:form.id,personal_nombre:form.nombre,fecha_inicio:ausForm.fecha_inicio,fecha_fin:ausForm.fecha_fin,motivo:ausForm.motivo||""},session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);setShowAusForm(false);setAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}catch{alert("Error.");}finally{setSaving(false);}};
   const delAusencia=async(id)=>{if(!confirm("¿Eliminar ausencia?"))return;try{await dbDelete("ausencias",id,session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);}catch{alert("Error.");}};
   const toggleNotifProactivas=()=>{const v=!notifProactivas;setNotifProactivas(v);localStorage.setItem("cirmi_notif_proact",String(v));};
+
+  // ── Exportar .ics ──
+  const icsDate=(dateStr,timeStr)=>{const d=dateStr.replace(/-/g,"");if(!timeStr)return d;const t=timeStr.replace(":","")+"00";return`${d}T${t}`;};
+  const nextDay=(dateStr)=>{const d=new Date(dateStr+"T12:00:00");d.setDate(d.getDate()+1);return fmt(d).replace(/-/g,"");};
+  const icsEscape=(s)=>String(s||"").replace(/[\\;,]/g,"\\$&").replace(/\n/g,"\\n");
+  const makeICS=(events,calName)=>{
+    const rows=["BEGIN:VCALENDAR","VERSION:2.0",`PRODID:-//CIRMI//Gestión Quirúrgica//ES`,`X-WR-CALNAME:CIRMI – ${calName}`,"CALSCALE:GREGORIAN","METHOD:PUBLISH"];
+    events.forEach(e=>{
+      rows.push("BEGIN:VEVENT");
+      rows.push(`UID:${e.uid}`);
+      if(e.allDay){rows.push(`DTSTART;VALUE=DATE:${e.start}`);rows.push(`DTEND;VALUE=DATE:${e.end}`);}
+      else{rows.push(`DTSTART:${e.start}`);rows.push(`DTEND:${e.end}`);}
+      rows.push(`SUMMARY:${icsEscape(e.summary)}`);
+      if(e.desc)rows.push(`DESCRIPTION:${icsEscape(e.desc)}`);
+      if(e.loc)rows.push(`LOCATION:${icsEscape(e.loc)}`);
+      rows.push("END:VEVENT");
+    });
+    rows.push("END:VCALENDAR");
+    return rows.join("\r\n");
+  };
+  const downloadICS=(content,filename)=>{const blob=new Blob([content],{type:"text/calendar;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);};
+
+  const exportICSAgenda=()=>{
+    const evs=cirugias.filter(c=>c.fecha>=todayStr&&c.estado!=="Cancelada"&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)).map(c=>({
+      uid:`cirmi-cx-${c.id}@cirmi`,start:icsDate(c.fecha,c.inicio||"08:00"),end:icsDate(c.fecha,c.fin||"10:00"),allDay:false,
+      summary:`🔪 ${c.tipo||"Cirugía"}${c.paciente?" — "+c.paciente:""}`,
+      desc:`Cirujano: ${c.cirujano||"—"}\nAyudante: ${c.ayudante||"—"}\nEnfermera: ${c.enfermera||"—"}\nQ: ${c.quirofano||"—"}\nEstado: ${c.estado||"—"}${c.material?"\nMaterial: "+c.material:""}`,
+      loc:c.hospital||"",
+    }));
+    if(!evs.length){alert("No hay cirugías futuras para exportar.");return;}
+    downloadICS(makeICS(evs,"Agenda"),`CIRMI-Agenda.ics`);
+  };
+  const exportICSGuardias=()=>{
+    const hosp=guardHosp||hospNames[0];
+    const evs=guardias.filter(g=>g.fecha>=todayStr&&(!hosp||g.hospital===hosp)).map(g=>({
+      uid:`cirmi-g-${g.id}@cirmi`,start:icsDate(g.fecha,null).replace(/-/g,""),end:nextDay(g.fecha),allDay:true,
+      summary:`🛡️ Guardia — ${g.hospital}`,
+      desc:`Principal: ${g.cirujano_principal||"—"}\nAyudante: ${g.cirujano_ayudante||"—"}${g.notas?"\nNotas: "+g.notas:""}`,
+      loc:g.hospital||"",
+    }));
+    if(!evs.length){alert("No hay guardias futuras para exportar.");return;}
+    downloadICS(makeICS(evs,"Guardias"),`CIRMI-Guardias-${hosp||"todas"}.ics`);
+  };
+  const exportICSConsultas=()=>{
+    const hosp=consHosp||hospNames[0];
+    const evs=consEstados.filter(e=>e.fecha>=todayStr&&!e.cerrado&&e.hospital===hosp).map(e=>({
+      uid:`cirmi-cons-${e.id}@cirmi`,
+      start:icsDate(e.fecha,e.turno==="mañana"?"09:00":"15:00"),end:icsDate(e.fecha,e.turno==="mañana"?"14:00":"20:00"),allDay:false,
+      summary:`🩺 Consulta ${e.sala} ${e.turno}${e.cirujano?" — "+e.cirujano:""}`,
+      desc:`Hospital: ${e.hospital}\nSala: ${e.sala}\nTurno: ${e.turno}${e.cirujano?"\nCirujano: "+e.cirujano:""}`,
+      loc:e.hospital||"",
+    }));
+    if(!evs.length){alert("No hay consultas abiertas futuras para exportar.");return;}
+    downloadICS(makeICS(evs,"Consultas"),`CIRMI-Consultas-${hosp||"todas"}.ics`);
+  };
+  const exportICSQuirofanos=()=>{
+    const hosp=quirHosp||hospNames[0];
+    const evs=quirEstados.filter(e=>e.fecha>=todayStr&&!e.cerrado&&e.hospital===hosp).map(e=>({
+      uid:`cirmi-quir-${e.id}@cirmi`,
+      start:icsDate(e.fecha,e.turno==="mañana"?"08:00":"15:00"),end:icsDate(e.fecha,e.turno==="mañana"?"15:00":"21:00"),allDay:false,
+      summary:`🏥 ${e.quirofano} abierto — ${e.turno}`,
+      desc:`Hospital: ${e.hospital}\nQuirófano: ${e.quirofano}\nTurno: ${e.turno}`,
+      loc:e.hospital||"",
+    }));
+    if(!evs.length){alert("No hay quirófanos abiertos futuros para exportar.");return;}
+    downloadICS(makeICS(evs,"Quirófanos"),`CIRMI-Quirofanos-${hosp||"todos"}.ics`);
+  };
   const exportarDia=()=>{const cxs=cxDiaFilt.slice().sort((a,b)=>a.inicio.localeCompare(b.inicio));const rows=cxs.map(c=>`<tr><td>${c.inicio||""}–${c.fin||""}</td><td>${c.tipo||""}</td><td>${c.paciente||""}</td><td>${c.cirujano||""}</td><td>${c.ayudante||""}</td><td>${c.enfermera||""}</td><td>${c.quirofano||""}</td><td>${c.hospital||""}</td><td>${(c.material||"").replace(/</g,"&lt;")}</td><td>${(c.obs||"").replace(/</g,"&lt;")}</td></tr>`).join("");const html=`<!DOCTYPE html><html><head><title>CIRMI – Parte ${selDate}</title><style>body{font-family:Arial,sans-serif;font-size:12px;color:#1C2B3A;margin:20px}h1{font-size:16px;color:#2E3F52;margin-bottom:4px}h2{font-size:12px;font-weight:normal;color:#7A90A4;margin-bottom:18px}table{width:100%;border-collapse:collapse}th{background:#4A6079;color:white;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}td{padding:6px 8px;border-bottom:1px solid #DDE4EB;font-size:11px;vertical-align:top}tr:nth-child(even)td{background:#F2F5F8}footer{margin-top:20px;font-size:10px;color:#7A90A4}@media print{body{margin:0}}</style></head><body><h1>CIRMI — Parte diario</h1><h2>${selDate} · ${cxs.length} intervención${cxs.length!==1?"es":""}${agFiltHosp!=="Todos"?" · "+agFiltHosp:""}</h2>${rows?`<table><thead><tr><th>Hora</th><th>Tipo</th><th>Paciente</th><th>Cirujano</th><th>Ayudante</th><th>Enfermera</th><th>Quirófano</th><th>Hospital</th><th>Material</th><th>Notas</th></tr></thead><tbody>${rows}</tbody></table>`:"<p style='color:#7A90A4;text-align:center;padding:30px'>Sin cirugías este día</p>"}<footer>Generado ${new Date().toLocaleString("es-ES")} · CIRMI Gestión Quirúrgica</footer><script>window.onload=function(){window.print()}<\/script></body></html>`;const w=window.open("","_blank","width=1100,height=720");if(w){w.document.write(html);w.document.close();}};
   const exportarCSVMes=()=>{const hoy=new Date();const cxs=cirugias.filter(c=>{const d=new Date(c.fecha+'T12:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear()&&(filtFact==="Todos"||c.factura===filtFact);}).sort((a,b)=>a.fecha.localeCompare(b.fecha));const hdr=["ID","Fecha","Tipo","Paciente","Cirujano","Ayudante","Enfermera","Hospital","Quirófano","Estado","Factura","Material","Observaciones"];const rows=cxs.map(c=>[c.id,c.fecha,c.tipo||"",c.paciente||"",c.cirujano||"",c.ayudante||"",c.enfermera||"",c.hospital||"",c.quirofano||"",c.estado||"",c.factura||"",c.material||"",(c.obs||"").replace(/,/g,";")]);const csv=[hdr,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`CIRMI-${MESES[hoy.getMonth()]}-${hoy.getFullYear()}.csv`;a.click();URL.revokeObjectURL(url);};
 
@@ -706,6 +773,7 @@ export default function App(){
                   </select>
                   <button className="btn-sec" onClick={exportarDia} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📄 Parte día</button>
                   <button className="btn-sec" onClick={exportarSemana} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📄 PDF semana</button>
+                  <button className="btn-sec" onClick={exportICSAgenda} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📅 Exportar .ics</button>
                 </div>
               </div>
 
@@ -871,6 +939,7 @@ export default function App(){
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                   {hospNames.map((h,i)=><button key={h} onClick={()=>setGuardHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:guardHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:guardHosp===h?"white":B.slate,borderColor:guardHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   {canSugerirGuardia&&<button className="btn-gold" onClick={openSugerencia} style={{padding:"7px 13px",fontSize:13}}>+ Sugerir día</button>}
+                  <button className="btn-sec" onClick={exportICSGuardias} style={{padding:"7px 13px",fontSize:13,whiteSpace:"nowrap"}}>📅 .ics</button>
                 </div>
               </div>
 
@@ -956,7 +1025,10 @@ export default function App(){
               <div>
                 {/* Cabecera */}
                 <div style={{marginBottom:14}}>
-                  <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:10}}>{titulo}</h2>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>{titulo}</h2>
+                    <button className="btn-sec" onClick={exportICSQuirofanos} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📅 .ics</button>
+                  </div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                     {hospNames.map((h,i)=><button key={h} onClick={()=>setSelHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:selHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:selHosp===h?"white":B.slate,borderColor:selHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   </div>
@@ -1064,7 +1136,10 @@ export default function App(){
             return(
               <div>
                 <div style={{marginBottom:14}}>
-                  <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:10}}>🩺 Consultas</h2>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🩺 Consultas</h2>
+                    <button className="btn-sec" onClick={exportICSConsultas} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📅 .ics</button>
+                  </div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                     {hospNames.map((h,i)=><button key={h} onClick={()=>{setConsHosp(h);setConsEditSlot(null);}} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:consHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:consHosp===h?"white":B.slate,borderColor:consHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   </div>

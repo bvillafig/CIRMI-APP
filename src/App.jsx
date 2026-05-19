@@ -671,16 +671,44 @@ export default function App(){
       <div style={{maxWidth:1280,margin:"0 auto",padding:mob?"16px 14px":`22px 20px`,paddingBottom:mob?80:22}}>
 
         {/* STATS */}
-        <div style={{display:"grid",gridTemplateColumns:mob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-          {[{label:"Hoy",value:hoyN,icon:"🔪",accent:B.slate},{label:"Este mes",value:mesN,icon:"📅",accent:B.slateLight},...(isAdmin?[{label:"Fact. pend.",value:pendFact,icon:"📋",accent:B.goldDark}]:[]),{label:"Total",value:cirugias.length,icon:"📊",accent:B.slateDark}].map(s=>(
-            <div key={s.label} className="stat-card" style={{borderLeft:`4px solid ${s.accent}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div><div style={{fontSize:mob?22:26,fontWeight:700,color:s.accent,lineHeight:1}}>{s.value}</div><div style={{fontSize:11,color:B.muted,marginTop:3}}>{s.label}</div></div>
-                <span style={{fontSize:mob?16:18}}>{s.icon}</span>
-              </div>
+        {(()=>{
+          const hoyConf=cirugias.filter(c=>c.fecha===todayStr&&c.estado==="Confirmada").length;
+          const hoyPend=cirugias.filter(c=>c.fecha===todayStr&&c.estado==="Pendiente").length;
+          const prox7=cirugias.filter(c=>{const diff=(new Date(c.fecha+'T12:00:00')-today)/86400000;return diff>0&&diff<=7&&c.estado!=="Cancelada";}).length;
+          const cards=[
+            {label:"Hoy",value:hoyN,icon:"🔪",accent:hoyN>0?B.slate:"#94A3B8",
+              sub:hoyN>0?`${hoyConf} confirmadas · ${hoyPend} pendientes`:"Sin cirugías",
+              onClick:()=>{setSelDate(todayStr);setTab("agenda");}},
+            {label:"Próx. 7 días",value:prox7,icon:"📅",accent:prox7>0?B.slateLight:"#94A3B8",
+              sub:`${mesN} en el mes actual`,
+              onClick:()=>setTab("agenda")},
+            ...(isAdmin?[{label:"Fact. pendientes",value:pendFact,icon:"💰",
+              accent:pendFact>0?B.goldDark:"#94A3B8",
+              sub:pendFact>0?"Requieren atención":"Al día ✓",
+              onClick:()=>{setTab("facturacion");setFiltFact("Pendiente");}}]:[]),
+            {label:"Alertas",value:alertasProact.length,icon:"⚠️",
+              accent:alertasProact.length>0?"#DC2626":"#94A3B8",
+              sub:alertasProact.length>0?"Requieren revisión":"Sin alertas ✓",
+              onClick:()=>setTab("inicio")},
+          ];
+          return(
+            <div style={{display:"grid",gridTemplateColumns:mob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+              {cards.map(s=>(
+                <div key={s.label} onClick={s.onClick} className="stat-card"
+                  style={{borderTop:`3px solid ${s.accent}`,cursor:"pointer",transition:"all .15s"}}
+                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 20px rgba(46,63,82,.13)"}
+                  onMouseLeave={e=>e.currentTarget.style.boxShadow=""}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:`${s.accent}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{s.icon}</div>
+                  </div>
+                  <div style={{fontSize:mob?26:32,fontWeight:800,color:s.accent,lineHeight:1,marginBottom:3}}>{s.value}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:B.text,marginBottom:2}}>{s.label}</div>
+                  <div style={{fontSize:10,color:B.muted}}>{s.sub}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })()}
 
         {loading?<Spin/>:(<>
 
@@ -704,16 +732,45 @@ export default function App(){
                 </div>
 
                 {/* Stats personales */}
-                <div style={{display:"grid",gridTemplateColumns:mob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-                  {[{label:"Hoy",value:hoyMisCx.length,icon:"🔪",accent:B.slate},{label:"Esta semana",value:semMisCx.length,icon:"📅",accent:B.slateLight},{label:"Total próximas",value:misCx.length,icon:"📊",accent:B.slateDark},{label:"Guardias",value:misGuard.length,icon:"🛡️",accent:"#3D6B8C"}].map(s=>(
-                    <div key={s.label} className="stat-card" style={{borderLeft:`4px solid ${s.accent}`}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                        <div><div style={{fontSize:mob?22:26,fontWeight:700,color:s.accent,lineHeight:1}}>{s.value}</div><div style={{fontSize:11,color:B.muted,marginTop:3}}>{s.label}</div></div>
-                        <span style={{fontSize:mob?16:18}}>{s.icon}</span>
-                      </div>
+                {(()=>{
+                  const proxCx=misCx.find(c=>c.fecha>todayStr)||misCx[0];
+                  const proxGuard=misGuard[0];
+                  const misCxConf=misCx.filter(c=>c.estado==="Confirmada").length;
+                  const misCxHosp=[...new Set(misCx.map(c=>c.hospital))];
+                  const pcards=[
+                    {label:"Hoy",value:hoyMisCx.length,icon:"🔪",
+                      accent:hoyMisCx.length>0?"#2E7D52":"#94A3B8",
+                      sub:hoyMisCx.length>0?`${hoyMisCx[0].inicio}–${hoyMisCx[0].fin} · ${hoyMisCx[0].hospital}`:"Sin cirugías hoy",
+                      onClick:()=>{setSelDate(todayStr);setTab("agenda");}},
+                    {label:"Esta semana",value:semMisCx.length,icon:"📅",
+                      accent:semMisCx.length>0?B.slate:"#94A3B8",
+                      sub:proxCx&&proxCx.fecha!==todayStr?`Próxima: ${proxCx.fecha} · ${proxCx.inicio}`:"Sin próximas",
+                      onClick:()=>setTab("agenda")},
+                    {label:"Total próximas",value:misCx.length,icon:"📊",
+                      accent:B.slateDark,
+                      sub:misCx.length>0?`${misCxConf} confirmadas · ${misCxHosp.length} hospital${misCxHosp.length!==1?"es":""}`:"Sin cirugías",
+                      onClick:()=>setTab("programacion")},
+                    {label:"Guardias",value:misGuard.length,icon:"🛡️",
+                      accent:misGuard.length>0?"#3D6B8C":"#94A3B8",
+                      sub:proxGuard?`Próxima: ${proxGuard.fecha} · ${proxGuard.hospital}`:"Sin guardias",
+                      onClick:()=>setTab("guardias")},
+                  ];
+                  return(
+                    <div style={{display:"grid",gridTemplateColumns:mob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                      {pcards.map(s=>(
+                        <div key={s.label} onClick={s.onClick} className="stat-card"
+                          style={{borderTop:`3px solid ${s.accent}`,cursor:"pointer",transition:"all .15s"}}
+                          onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 20px rgba(46,63,82,.13)"}
+                          onMouseLeave={e=>e.currentTarget.style.boxShadow=""}>
+                          <div style={{width:34,height:34,borderRadius:9,background:`${s.accent}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,marginBottom:8}}>{s.icon}</div>
+                          <div style={{fontSize:mob?26:32,fontWeight:800,color:s.accent,lineHeight:1,marginBottom:3}}>{s.value}</div>
+                          <div style={{fontSize:12,fontWeight:600,color:B.text,marginBottom:2}}>{s.label}</div>
+                          <div style={{fontSize:10,color:B.muted}}>{s.sub}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
 
                 <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"repeat(2,1fr)",gap:16}}>
                   {/* Mis próximas cirugías */}

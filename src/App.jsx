@@ -205,6 +205,7 @@ export default function App(){
   const[ausForm,setAusForm]=useState({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});
   const[showAusForm,setShowAusForm]=useState(false);
   const[consEditSlot,setConsEditSlot]=useState(null);
+  const[quirEditSlot,setQuirEditSlot]=useState(null);
   const[notifProactivas,setNotifProactivas]=useState(()=>localStorage.getItem("cirmi_notif_proact")!=="false");
   const[audFiltTabla,setAudFiltTabla]=useState("todas");
   const[audFiltAccion,setAudFiltAccion]=useState("todas");
@@ -416,14 +417,21 @@ export default function App(){
   // Cerrado por defecto: sin registro = cerrado; registro con cerrado=false = abierto
   const esCerradoQuir=(hosp,q,fecha,turno)=>{const r=quirEstados.find(e=>e.hospital===hosp&&e.quirofano===q&&e.fecha===fecha&&e.turno===turno);return!r||r.cerrado;};
   const esCerradoCons=(hosp,s,fecha,turno)=>{const r=consEstados.find(e=>e.hospital===hosp&&e.sala===s&&e.fecha===fecha&&e.turno===turno);return!r||r.cerrado;};
-  const toggleCerrado=async(hospital,quirofano,fecha,turno)=>{
-    const ex=quirEstados.find(q=>q.hospital===hospital&&q.quirofano===quirofano&&q.fecha===fecha&&q.turno===turno);
-    const actCerrado=!ex||ex.cerrado;
+  const saveQuirofanoEstado=async(hospital,quirofano,fecha,turno,estadoNuevo,cirujano="")=>{
+    const ex=quirEstados.find(e=>e.hospital===hospital&&e.quirofano===quirofano&&e.fecha===fecha&&e.turno===turno);
     setSaving(true);
     try{
-      if(ex){await dbUpdate("quirofanos_estado",ex.id,{cerrado:!actCerrado},session);}
-      else{await dbInsert("quirofanos_estado",{hospital,quirofano,fecha,turno,cerrado:false},session);}
+      if(estadoNuevo==="blank"){
+        if(ex)await dbDelete("quirofanos_estado",ex.id,session);
+      }else if(estadoNuevo==="cerrado"){
+        if(ex)await dbUpdate("quirofanos_estado",ex.id,{cerrado:true,cirujano:""},session);
+        else await dbInsert("quirofanos_estado",{hospital,quirofano,fecha,turno,cerrado:true,cirujano:""},session);
+      }else{
+        if(ex)await dbUpdate("quirofanos_estado",ex.id,{cerrado:false,cirujano:cirujano||""},session);
+        else await dbInsert("quirofanos_estado",{hospital,quirofano,fecha,turno,cerrado:false,cirujano:cirujano||""},session);
+      }
       const qe=await dbGet("quirofanos_estado","order=fecha.asc");setQuirEstados(qe);
+      if(estadoNuevo!=="abierto"&&estadoNuevo!=="asignado")setQuirEditSlot(null);
     }catch{alert("Error.");}finally{setSaving(false);}
   };
   const saveConsultaEstado=async(hospital,sala,fecha,turno,estadoNuevo,cirujano="")=>{
@@ -1027,8 +1035,9 @@ export default function App(){
             const setPrevNext=[setQuirY,setQuirM];
             const selDia=quirDate;
             const setSelDia=setQuirDate;
+            const getQuirRec=(sala,fecha,turno)=>quirEstados.find(e=>e.hospital===selHosp&&e.quirofano===sala&&e.fecha===fecha&&e.turno===turno)||null;
+            const getQuirEst=(rec)=>{if(!rec)return"blank";if(rec.cerrado)return"cerrado";if(rec.cirujano)return"asignado";return"abierto";};
             const esCerrado=(sala,fecha,turno)=>esCerradoQuir(selHosp,sala,fecha,turno);
-            const doToggle=(sala,fecha,turno)=>toggleCerrado(selHosp,sala,fecha,turno);
             return(
               <div>
                 {/* Cabecera */}
@@ -1097,32 +1106,51 @@ export default function App(){
                     <div key={sala} style={{display:"grid",gridTemplateColumns:`${mob?64:90}px 1fr 1fr`,borderBottom:si<salas.length-1?`1px solid ${B.border}`:"none"}}>
                       <div style={{padding:"12px",fontWeight:700,fontSize:13,color:B.slateDark,display:"flex",alignItems:"center",background:"#FAFBFC",borderRight:`1px solid ${B.border}`}}>{sala}</div>
                       {["mañana","tarde"].map(turno=>{
-                        const cerrado=esCerrado(sala,selDia,turno);
-                        const cxs=esQuir?cirugias.filter(c=>c.hospital===selHosp&&c.quirofano===sala&&c.fecha===selDia&&turnoFromHora(c.inicio)===turno):[];
-                        const ocupado=cxs.length>0;
-                        const bg=cerrado?"#FEF2F2":ocupado?"#FFFBEB":"#F0FDF4";
-                        const cirujanos=[...new Set(cxs.map(c=>c.cirujano).filter(Boolean))];
+                        const rec=getQuirRec(sala,selDia,turno);
+                        const est=getQuirEst(rec);
+                        const cxs=cirugias.filter(c=>c.hospital===selHosp&&c.quirofano===sala&&c.fecha===selDia&&turnoFromHora(c.inicio)===turno);
+                        const cxCirujanos=[...new Set(cxs.map(c=>c.cirujano).filter(Boolean))];
+                        const asigColor=est==="asignado"?personal.find(p=>p.nombre===rec?.cirujano)?.color:null;
+                        const bg=est==="cerrado"?"#FEF2F2":asigColor?`${asigColor}22`:est==="abierto"?"#F0FDF4":cxs.length>0?"#FFFBEB":"#FAFBFC";
+                        const dotColor=est==="cerrado"?"#B91C1C":asigColor||"#2E7D52";
+                        const label=est==="cerrado"?"Cerrado":est==="asignado"?(rec?.cirujano||"Asignado"):cxs.length>0?"Con cirugías":"Disponible";
+                        const labelColor=est==="cerrado"?"#B91C1C":asigColor||"#166534";
+                        const isEd=quirEditSlot?.sala===sala&&quirEditSlot?.turno===turno;
                         return(
-                          <div key={turno} style={{padding:"10px 12px",background:bg,borderLeft:`1px solid ${B.border}`}}>
-                            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                          <div key={turno} style={{borderLeft:`1px solid ${B.border}`}}>
+                            <div style={{padding:"10px 12px",background:bg,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
                               <div style={{flex:1}}>
-                                <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:cirujanos.length>0?4:0}}>
-                                  <div style={{width:8,height:8,borderRadius:"50%",background:cerrado?"#B91C1C":ocupado?"#D4A820":"#2E7D52",flexShrink:0}}/>
-                                  <span style={{fontSize:11,fontWeight:600,color:cerrado?"#B91C1C":ocupado?"#92400E":"#166534"}}>
-                                    {cerrado?"Cerrado":ocupado?"Con actividad":"Disponible"}
-                                  </span>
+                                <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:cxCirujanos.length>0?4:0}}>
+                                  <div style={{width:8,height:8,borderRadius:"50%",background:dotColor,flexShrink:0}}/>
+                                  <span style={{fontSize:11,fontWeight:600,color:labelColor}}>{label}</span>
                                 </div>
-                                {cirujanos.length>0&&<div style={{fontSize:11,color:B.muted,marginTop:2}}>🔪 {cirujanos.join(", ")}</div>}
+                                {cxCirujanos.length>0&&<div style={{fontSize:11,color:B.muted,marginTop:2}}>🔪 {cxCirujanos.join(", ")}</div>}
                                 {cxs.length>1&&<div style={{fontSize:10,color:B.muted}}>{cxs.length} intervenciones</div>}
                               </div>
                               {canCreate&&(
-                                <button onClick={()=>doToggle(sala,selDia,turno)} disabled={saving}
+                                <button onClick={()=>setQuirEditSlot(isEd?null:{sala,turno})} disabled={saving}
                                   style={{flexShrink:0,padding:"3px 8px",borderRadius:6,border:"1.5px solid",fontSize:10,fontWeight:600,cursor:"pointer",
-                                    background:cerrado?"#E6F4EC":"#FEF2F2",color:cerrado?"#2E7D52":"#DC2626",borderColor:cerrado?"#86EFAC":"#FECACA"}}>
-                                  {cerrado?"Abrir":"Cerrar"}
+                                    background:isEd?"#EFF6FF":"white",color:B.slate,borderColor:B.border}}>
+                                  {isEd?"▲":"▾"}
                                 </button>
                               )}
                             </div>
+                            {isEd&&(
+                              <div style={{padding:"10px 12px",background:"#F8FAFC",borderTop:`1px solid ${B.border}`,display:"flex",flexDirection:"column",gap:7}}>
+                                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                                  {est==="blank"&&<button onClick={()=>saveQuirofanoEstado(selHosp,sala,selDia,turno,"abierto","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:"1px solid #86EFAC",background:"#F0FDF4",fontSize:11,fontWeight:600,cursor:"pointer",color:"#166534"}}>🟢 Abrir</button>}
+                                  {(est==="abierto"||est==="asignado")&&<button onClick={()=>saveQuirofanoEstado(selHosp,sala,selDia,turno,"cerrado","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:"1px solid #FECACA",background:"#FEF2F2",fontSize:11,fontWeight:600,cursor:"pointer",color:"#B91C1C"}}>🔒 Cerrar</button>}
+                                  {est==="cerrado"&&<button onClick={()=>saveQuirofanoEstado(selHosp,sala,selDia,turno,"abierto","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:"1px solid #86EFAC",background:"#F0FDF4",fontSize:11,fontWeight:600,cursor:"pointer",color:"#166534"}}>🔓 Abrir</button>}
+                                  {(est==="abierto"||est==="asignado")&&<button onClick={()=>saveQuirofanoEstado(selHosp,sala,selDia,turno,"blank","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:`1px solid ${B.border}`,background:"white",fontSize:11,fontWeight:600,cursor:"pointer",color:B.muted}}>✕ Quitar</button>}
+                                </div>
+                                {(est==="abierto"||est==="asignado")&&(
+                                  <select className="inp" style={{padding:"5px 8px",fontSize:12}} value={rec?.cirujano||""} onChange={e=>saveQuirofanoEstado(selHosp,sala,selDia,turno,"abierto",e.target.value)}>
+                                    <option value="">— Sin asignar —</option>
+                                    {personal.map(p=><option key={p.id}>{p.nombre}</option>)}
+                                  </select>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

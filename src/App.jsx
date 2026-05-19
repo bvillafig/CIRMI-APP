@@ -1058,23 +1058,37 @@ export default function App(){
                   onToday={()=>{setPrevNext[0](today.getFullYear());setPrevNext[1](today.getMonth());setSelDia(todayStr);}}
                   renderDay={({day,dateStr,isToday,isWeekend,col})=>{
                     const isSel=dateStr===selDia;
-                    // Solo mostramos los slots ABIERTOS (registro con cerrado=false)
-                    const slots=salas.map(s=>{
-                      const abiertaM=!esCerrado(s,dateStr,"mañana");
-                      const abiertaT=!esCerrado(s,dateStr,"tarde");
-                      const cxs=esQuir?cirugias.filter(c=>c.hospital===selHosp&&c.quirofano===s&&c.fecha===dateStr):[];
-                      const ocupado=cxs.length>0;
-                      return{s,abierta:abiertaM||abiertaT,ocupado};
-                    }).filter(x=>x.abierta);
+                    const salaInfos=salas.map(s=>{
+                      const recM=getQuirRec(s,dateStr,"mañana");
+                      const recT=getQuirRec(s,dateStr,"tarde");
+                      const estM=getQuirEst(recM);
+                      const estT=getQuirEst(recT);
+                      const isOpen=estM==="abierto"||estM==="asignado"||estT==="abierto"||estT==="asignado";
+                      const isClosed=estM==="cerrado"||estT==="cerrado";
+                      const cxs=cirugias.filter(c=>c.hospital===selHosp&&c.quirofano===s&&c.fecha===dateStr);
+                      const asigRec=estM==="asignado"?recM:estT==="asignado"?recT:null;
+                      const cirColor=asigRec?personal.find(p=>p.nombre===asigRec.cirujano)?.color:null;
+                      return{s,isOpen,isClosed,ocupado:cxs.length>0,cirColor};
+                    });
+                    const hasCerrado=salaInfos.some(x=>x.isClosed);
+                    const hasCirugias=salaInfos.some(x=>x.isOpen&&x.ocupado);
+                    const hasOpen=salaInfos.some(x=>x.isOpen);
+                    const openDots=salaInfos.filter(x=>x.isOpen);
+                    let dayBg=isWeekend?"#FAFBFC":"white";
+                    if(hasCerrado)dayBg="#FEF2F2";
+                    if(hasCirugias&&!hasCerrado)dayBg="#FFFBEB";
+                    if(hasOpen&&!hasCirugias&&!hasCerrado)dayBg="#F0FDF4";
+                    if(isToday&&!isSel)dayBg=B.goldLight;
+                    if(isSel)dayBg=B.slateDark;
                     return(
-                      <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:isWeekend?"#FAFBFC":"white"}} onClick={()=>setSelDia(dateStr)}>
+                      <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:dayBg}} onClick={()=>setSelDia(dateStr)}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                           <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
                         </div>
-                        {slots.length>0&&(
+                        {openDots.length>0&&(
                           <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
-                            {slots.map(({s,ocupado})=>(
-                              <div key={s} title={s} style={{width:mob?7:9,height:mob?7:9,borderRadius:3,background:isSel?"rgba(255,255,255,.55)":ocupado?"#D4A820":"#2E7D52",flexShrink:0}}/>
+                            {openDots.map(({s,ocupado,cirColor})=>(
+                              <div key={s} title={s} style={{width:mob?7:9,height:mob?7:9,borderRadius:3,background:isSel?"rgba(255,255,255,.55)":cirColor||(ocupado?"#D4A820":"#2E7D52"),flexShrink:0}}/>
                             ))}
                           </div>
                         )}
@@ -1091,9 +1105,10 @@ export default function App(){
 
                 {/* Leyenda */}
                 <div style={{display:"flex",gap:14,marginBottom:12,flexWrap:"wrap"}}>
-                  {[["#2E7D52","Disponible (abierto)"],["#D4A820",esQuir?"Con cirugías":"Con actividad"],["#B91C1C","Cerrado"]].map(([c,l])=>(
-                    <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:11,color:B.muted}}>{l}</span></div>
+                  {[["#F0FDF4","#166534","Abierto sin cirugías"],["#FFFBEB","#92400E","Abierto con cirugías"],["#FEF2F2","#B91C1C","Cerrado"]].map(([bg,col,l])=>(
+                    <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:14,borderRadius:4,background:bg,border:`1.5px solid ${col}33`}}/><span style={{fontSize:11,color:B.muted}}>{l}</span></div>
                   ))}
+                  <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:"50%",background:"#4A6079"}}/><span style={{fontSize:11,color:B.muted}}>Punto = color cirujano asignado</span></div>
                 </div>
 
                 {/* Tabla salas × turno */}

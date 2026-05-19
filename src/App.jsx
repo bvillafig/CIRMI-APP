@@ -206,6 +206,8 @@ export default function App(){
   const[showAusForm,setShowAusForm]=useState(false);
   const[consEditSlot,setConsEditSlot]=useState(null);
   const[notifProactivas,setNotifProactivas]=useState(()=>localStorage.getItem("cirmi_notif_proact")!=="false");
+  const[audFiltTabla,setAudFiltTabla]=useState("todas");
+  const[audFiltAccion,setAudFiltAccion]=useState("todas");
   const[uploading,setUploading]=useState(false);
   const fileRef=useRef();
 
@@ -1528,8 +1530,6 @@ export default function App(){
                 const accionLabel={insert:"⊕ Creado",update:"✎ Editado",delete:"✕ Eliminado"};
                 const accionColor={insert:"#2E7D52",update:B.slate,delete:"#B91C1C"};
                 const tablaLabel={cirugias:"Cirugía",guardias:"Guardia",personal:"Personal",hospitales:"Hospital",ausencias:"Ausencia"};
-                const[audFiltTabla,setAudFiltTabla]=React.useState("todas");
-                const[audFiltAccion,setAudFiltAccion]=React.useState("todas");
                 const audFilt=auditoria.filter(a=>(audFiltTabla==="todas"||a.tabla===audFiltTabla)&&(audFiltAccion==="todas"||a.accion===audFiltAccion));
                 return(
                   <div>

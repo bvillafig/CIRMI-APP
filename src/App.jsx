@@ -270,6 +270,12 @@ export default function App(){
   const createNotif=async(uid,msg)=>{try{await dbInsert("notificaciones",{usuario_id:uid,mensaje:msg},session);}catch{}};
   const logAudit=async(tabla,registro_id,accion,cambios)=>{try{await dbInsert("auditoria",{tabla,registro_id,accion,cambios,usuario_nombre:perfil?.nombre||perfil?.email||"",usuario_id:authUser?.id},session);}catch{}};
   const estaAusente=(nombre,fecha)=>ausencias.some(a=>a.personal_nombre===nombre&&fecha>=a.fecha_inicio&&fecha<=a.fecha_fin);
+  const conflictoHorario=(nombre,fecha,inicio,fin,excludeId)=>{
+    if(!nombre||!fecha||!inicio||!fin)return null;
+    const t2m=(t)=>{const[h,m]=t.split(":").map(Number);return h*60+m;};
+    const s=t2m(inicio),e=t2m(fin);
+    return cirugias.find(c=>c.id!==excludeId&&c.fecha===fecha&&c.estado!=="Cancelada"&&[c.cirujano,c.ayudante,c.enfermera].includes(nombre)&&c.inicio&&c.fin&&t2m(c.inicio)<e&&t2m(c.fin)>s)||null;
+  };
   const addAusencia=async()=>{if(!ausForm.fecha_inicio||!ausForm.fecha_fin||ausForm.fecha_fin<ausForm.fecha_inicio){alert("Fechas inválidas.");return;}setSaving(true);try{await dbInsert("ausencias",{personal_id:form.id,personal_nombre:form.nombre,fecha_inicio:ausForm.fecha_inicio,fecha_fin:ausForm.fecha_fin,motivo:ausForm.motivo||""},session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);setShowAusForm(false);setAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}catch{alert("Error.");}finally{setSaving(false);}};
   const delAusencia=async(id)=>{if(!confirm("¿Eliminar ausencia?"))return;try{await dbDelete("ausencias",id,session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);}catch{alert("Error.");}};
   const toggleNotifProactivas=()=>{const v=!notifProactivas;setNotifProactivas(v);localStorage.setItem("cirmi_notif_proact",String(v));};
@@ -1542,6 +1548,7 @@ export default function App(){
               {form.fecha&&[form.cirujano,form.ayudante,form.enfermera].filter(Boolean).filter(n=>estaAusente(n,form.fecha)).map(n=>(
                 <div key={n} style={{marginTop:8,padding:"7px 10px",background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:8,fontSize:12,color:"#92400E"}}>⚠ <strong>{n}</strong> tiene ausencia registrada el {form.fecha}</div>
               ))}
+              {form.fecha&&form.inicio&&form.fin&&[{rol:"Cirujano",n:form.cirujano},{rol:"Ayudante",n:form.ayudante},{rol:"Enfermera",n:form.enfermera}].filter(x=>x.n).map(({rol,n})=>{const c=conflictoHorario(n,form.fecha,form.inicio,form.fin,form.id);return c?(<div key={n} style={{marginTop:8,padding:"7px 10px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:12,color:"#B91C1C"}}>🔴 <strong>{n}</strong> ({rol}) tiene conflicto: <em>{c.tipo||"otra cirugía"}</em> {c.inicio}–{c.fin} en {c.hospital}</div>):null;})}
               {modal==="cx_e"&&(()=>{const hist=auditoria.filter(a=>a.registro_id===form.id).slice(0,6);return hist.length>0?(<div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${B.border}`}}><div style={{fontSize:10,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Historial de cambios</div>{hist.map((a,i)=><div key={i} style={{fontSize:11,color:B.muted,marginBottom:5,padding:"5px 8px",background:B.bg,borderRadius:6}}><span style={{color:B.slate,fontWeight:600}}>{a.usuario_nombre}</span> · {(a.created_at||"").slice(0,16).replace("T"," ")} · {a.accion==="insert"?"⊕ Creada":a.accion==="delete"?"✕ Eliminada":`✎ ${Object.keys(a.cambios||{}).join(", ")}`}</div>)}</div>):null;})()}
               <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"space-between"}}>
                 <div style={{display:"flex",gap:8}}>{modal==="cx_e"&&<button className="btn-danger" onClick={()=>delCx(form.id)} disabled={saving}>🗑</button>}{modal==="cx_e"&&<button className="btn-sec" onClick={duplicarCx} style={{fontSize:12}}>📋 Duplicar</button>}</div>

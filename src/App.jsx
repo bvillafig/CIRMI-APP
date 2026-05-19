@@ -236,24 +236,27 @@ export default function App(){
   const loadAll=async()=>{
     setLoading(true);
     try{
-      const[c,p,h,g,s,d,n,qe,ce,au,aus]=await Promise.all([
+      const results=await Promise.allSettled([
         dbGet("cirugias","order=fecha.asc,inicio.asc"),
         dbGet("personal","order=nombre.asc&activo=eq.true"),
         dbGet("hospitales","order=nombre.asc&activo=eq.true"),
         dbGet("guardias","order=fecha.asc"),
         dbGet("sugerencias_guardia","order=created_at.desc"),
         dbGet("documentos","order=created_at.desc"),
-        dbGet("notificaciones",`usuario_id=eq.${authUser?.id}&order=created_at.desc&limit=20`),
+        dbGet("notificaciones",`usuario_id=eq.${authUser?.id}&order=created_at.desc&limit=20`,session),
         dbGet("quirofanos_estado","order=fecha.asc"),
         dbGet("consultas_estado","order=fecha.asc"),
         dbGet("auditoria","order=created_at.desc&limit=300",session),
         dbGet("ausencias","order=fecha_inicio.asc"),
       ]);
-      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);setQuirEstados(qe);setConsEstados(ce);setAuditoria(au||[]);setAusencias(aus||[]);
+      const ok=(r,fb=[])=>r.status==="fulfilled"?r.value:fb;
+      const[rC,rP,rH,rG,rS,rD,rN,rQe,rCe,rAu,rAus]=results;
+      const c=ok(rC),p=ok(rP),h=ok(rH),g=ok(rG),s=ok(rS),d=ok(rD),n=ok(rN),qe=ok(rQe),ce=ok(rCe),au=ok(rAu),aus=ok(rAus);
+      setCirugias(c);setPersonal(p);setHospitales(h);setGuardias(g);setSugerencias(s);setDocumentos(d);setNotifs(n);setQuirEstados(qe);setConsEstados(ce);setAuditoria(au);setAusencias(aus);
       if(h.length>0&&!guardHosp)setGuardHosp(h[0].nombre);
       if(h.length>0&&!quirHosp)setQuirHosp(h[0].nombre);
       if(h.length>0&&!consHosp)setConsHosp(h[0].nombre);
-      if(isAdmin){const pf=await dbGet("perfiles","order=created_at.desc");setPerfiles(pf);}
+      if(isAdmin){const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}
     }catch(e){console.error(e);}finally{setLoading(false);}
   };
 
@@ -1063,7 +1066,7 @@ export default function App(){
                 <div style={{marginBottom:14}}>
                   <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:10}}>🩺 Consultas</h2>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                    {hospNames.map((h,i)=><button key={h} onClick={()=>setConsHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:consHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:consHosp===h?"white":B.slate,borderColor:consHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
+                    {hospNames.map((h,i)=><button key={h} onClick={()=>{setConsHosp(h);setConsEditSlot(null);}} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:consHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:consHosp===h?"white":B.slate,borderColor:consHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   </div>
                 </div>
 
@@ -1620,7 +1623,7 @@ export default function App(){
               ):(()=>{
                 const q=queryBusq.trim().toLowerCase();
                 const hi=(txt)=>{if(!txt)return"";const i=txt.toLowerCase().indexOf(q);if(i<0)return txt;return<>{txt.slice(0,i)}<mark style={{background:B.goldLight,borderRadius:2,padding:"0 1px"}}>{txt.slice(i,i+q.length)}</mark>{txt.slice(i+q.length)}</>;};
-                const resCx=cirugias.filter(c=>[c.tipo_cirugia,c.paciente,c.cirujano,c.ayudante,c.enfermera,c.hospital,c.estado].some(v=>v&&v.toLowerCase().includes(q))).slice(0,6);
+                const resCx=cirugias.filter(c=>[c.tipo,c.paciente,c.cirujano,c.ayudante,c.enfermera,c.hospital,c.estado].some(v=>v&&v.toLowerCase().includes(q))).slice(0,6);
                 const resPers=personal.filter(p=>[p.nombre,p.rol].some(v=>v&&v.toLowerCase().includes(q))).slice(0,5);
                 const resDocs=documentos.filter(d=>[d.nombre,d.descripcion,d.categoria].some(v=>v&&v.toLowerCase().includes(q))).slice(0,5);
                 const total=resCx.length+resPers.length+resDocs.length;
@@ -1641,7 +1644,7 @@ export default function App(){
                     <SecH label="Cirugías" n={resCx.length}/>
                     {resCx.map(c=>(
                       <Row key={c.id} icon="🏥" iconBg={bEst(c.estado)}
-                        title={<>{hi(c.tipo_cirugia||"Sin tipo")} — {hi(c.paciente||"Sin paciente")}</>}
+                        title={<>{hi(c.tipo||"Sin tipo")} — {hi(c.paciente||"Sin paciente")}</>}
                         sub={`${c.fecha} · ${c.hospital||""} · ${c.cirujano||""}`}
                         badge={<Bdg label={c.estado||"?"} bg={bEst(c.estado)} color={ceColor(c.estado)}/>}
                         onClick={()=>{setTab("agenda");setSelDate(c.fecha);setShowBusqueda(false);}}/>

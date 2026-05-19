@@ -42,7 +42,7 @@ const ROL_CIRUJANO="cirujano";
 const ROL_ENFERMERO="enfermero";
 const ROLES_P=["Cirujano Principal","Cirujano","Enf. Instrumentista"];
 const QUIROFANOS=["Q-1","Q-2","Q-3","Q-4"];
-const SALAS_CONSULTA=["C-1","C-2","C-3","C-4"];
+const SALAS_CONSULTA=["C-1","C-2"];
 const COLORES=["#4A6079","#2E3F52","#6B8299","#D4A820","#8B6914","#3D6B8C","#6B4F9A","#2E7D52","#B91C1C","#1D6FA4"];
 const ESTADOS_CX=["Confirmada","Pendiente","Realizada","Cancelada"];
 const ESTADOS_FA=["Pendiente","Facturada","En revisión","Cobrada"];
@@ -204,6 +204,7 @@ export default function App(){
   const[ausencias,setAusencias]=useState([]);
   const[ausForm,setAusForm]=useState({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});
   const[showAusForm,setShowAusForm]=useState(false);
+  const[consEditSlot,setConsEditSlot]=useState(null);
   const[notifProactivas,setNotifProactivas]=useState(()=>localStorage.getItem("cirmi_notif_proact")!=="false");
   const[uploading,setUploading]=useState(false);
   const fileRef=useRef();
@@ -347,14 +348,21 @@ export default function App(){
       const qe=await dbGet("quirofanos_estado","order=fecha.asc");setQuirEstados(qe);
     }catch{alert("Error.");}finally{setSaving(false);}
   };
-  const toggleConsulta=async(hospital,sala,fecha,turno)=>{
+  const saveConsultaEstado=async(hospital,sala,fecha,turno,estadoNuevo,cirujano="")=>{
     const ex=consEstados.find(e=>e.hospital===hospital&&e.sala===sala&&e.fecha===fecha&&e.turno===turno);
-    const actCerrado=!ex||ex.cerrado;
     setSaving(true);
     try{
-      if(ex){await dbUpdate("consultas_estado",ex.id,{cerrado:!actCerrado},session);}
-      else{await dbInsert("consultas_estado",{hospital,sala,fecha,turno,cerrado:false},session);}
+      if(estadoNuevo==="blank"){
+        if(ex)await dbDelete("consultas_estado",ex.id,session);
+      }else if(estadoNuevo==="cerrada"){
+        if(ex)await dbUpdate("consultas_estado",ex.id,{cerrado:true,cirujano:""},session);
+        else await dbInsert("consultas_estado",{hospital,sala,fecha,turno,cerrado:true,cirujano:""},session);
+      }else{
+        if(ex)await dbUpdate("consultas_estado",ex.id,{cerrado:false,cirujano:cirujano||""},session);
+        else await dbInsert("consultas_estado",{hospital,sala,fecha,turno,cerrado:false,cirujano:cirujano||""},session);
+      }
       const ce=await dbGet("consultas_estado","order=fecha.asc");setConsEstados(ce);
+      if(estadoNuevo!=="abierta"&&estadoNuevo!=="asignada")setConsEditSlot(null);
     }catch{alert("Error.");}finally{setSaving(false);}
   };
 
@@ -927,24 +935,20 @@ export default function App(){
             </div>
           )}
 
-          {/* ══ MÓDULO GENÉRICO: renderiza Quirófanos o Consultas ══ */}
-          {(tab==="quirofanos"||tab==="consultas")&&(()=>{
-            const esQuir=tab==="quirofanos";
-            const titulo=esQuir?"🏥 Quirófanos":"🩺 Consultas";
-            const salas=esQuir?QUIROFANOS:SALAS_CONSULTA;
-            const salaLabel=esQuir?"Quirófano":"Consulta";
-            const estados=esQuir?quirEstados:consEstados;
-            const selHosp=esQuir?quirHosp:consHosp;
-            const setSelHosp=esQuir?setQuirHosp:setConsHosp;
-            const calY=esQuir?quirY:consY;const calM2=esQuir?quirM:consM;
-            const setPrevNext=esQuir?[setQuirY,setQuirM]:[setConsY,setConsM];
-            const selDia=esQuir?quirDate:consDate;
-            const setSelDia=esQuir?setQuirDate:setConsDate;
-            const esCerrado=(sala,fecha,turno)=>{
-              if(esQuir)return esCerradoQuir(selHosp,sala,fecha,turno);
-              return esCerradoCons(selHosp,sala,fecha,turno);
-            };
-            const doToggle=(sala,fecha,turno)=>esQuir?toggleCerrado(selHosp,sala,fecha,turno):toggleConsulta(selHosp,sala,fecha,turno);
+          {/* ══ QUIRÓFANOS ══ */}
+          {tab==="quirofanos"&&(()=>{
+            const esQuir=true;
+            const titulo="🏥 Quirófanos";
+            const salas=QUIROFANOS;
+            const salaLabel="Quirófano";
+            const selHosp=quirHosp;
+            const setSelHosp=setQuirHosp;
+            const calY=quirY;const calM2=quirM;
+            const setPrevNext=[setQuirY,setQuirM];
+            const selDia=quirDate;
+            const setSelDia=setQuirDate;
+            const esCerrado=(sala,fecha,turno)=>esCerradoQuir(selHosp,sala,fecha,turno);
+            const doToggle=(sala,fecha,turno)=>toggleCerrado(selHosp,sala,fecha,turno);
             return(
               <div>
                 {/* Cabecera */}
@@ -1036,6 +1040,110 @@ export default function App(){
                                 </button>
                               )}
                             </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ CONSULTAS ══ */}
+          {tab==="consultas"&&(()=>{
+            const getConsRec=(sala,fecha,turno)=>consEstados.find(e=>e.hospital===consHosp&&e.sala===sala&&e.fecha===fecha&&e.turno===turno)||null;
+            const getEst=(rec)=>{if(!rec)return"blank";if(rec.cerrado)return"cerrada";if(rec.cirujano)return"asignada";return"abierta";};
+            const eColor={blank:"white",cerrada:"#FEF2F2",abierta:"#F0FDF4",asignada:"#FFFBEB"};
+            const eDot={blank:B.border,cerrada:"#B91C1C",abierta:"#2E7D52",asignada:"#D4A820"};
+            const eLabel={blank:"Sin consulta",cerrada:"Cerrada",abierta:"Abierta",asignada:"Asignada"};
+            const eTxt={blank:B.muted,cerrada:"#B91C1C",abierta:"#166534",asignada:"#92400E"};
+            return(
+              <div>
+                <div style={{marginBottom:14}}>
+                  <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:10}}>🩺 Consultas</h2>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {hospNames.map((h,i)=><button key={h} onClick={()=>setConsHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:consHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:consHosp===h?"white":B.slate,borderColor:consHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
+                  </div>
+                </div>
+
+                <CalMes year={consY} month={consM}
+                  onPrev={()=>prevM(consY,consM,setConsY,setConsM)}
+                  onNext={()=>nextM(consY,consM,setConsY,setConsM)}
+                  onToday={()=>{setConsY(today.getFullYear());setConsM(today.getMonth());setConsDate(todayStr);}}
+                  renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                    const isSel=dateStr===consDate;
+                    const dots=SALAS_CONSULTA.flatMap(s=>["mañana","tarde"].map(t=>{const r=getConsRec(s,dateStr,t);return getEst(r);})).filter(e=>e!=="blank");
+                    return(
+                      <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:isWeekend?"#FAFBFC":"white"}} onClick={()=>{setConsDate(dateStr);setConsEditSlot(null);}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                        </div>
+                        {dots.length>0&&(
+                          <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+                            {dots.map((est,idx)=><div key={idx} style={{width:mob?6:8,height:mob?6:8,borderRadius:"50%",background:isSel?"rgba(255,255,255,.6)":eDot[est]}}/>)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+
+                <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                  <h3 style={{fontSize:15,fontWeight:700,color:B.slateDark}}>{consDate===todayStr?"Hoy":consDate}</h3>
+                  <span style={{fontSize:12,color:B.muted}}>{consHosp}</span>
+                </div>
+
+                <div style={{display:"flex",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+                  {[["blank","Sin consulta"],["abierta","Abierta (sin asignar)"],["asignada","Asignada"],["cerrada","Cerrada"]].map(([est,lbl])=>(
+                    <div key={est} style={{display:"flex",alignItems:"center",gap:5}}>
+                      <div style={{width:10,height:10,borderRadius:"50%",background:eDot[est],border:`1px solid ${est==="blank"?B.border:"transparent"}`}}/>
+                      <span style={{fontSize:11,color:B.muted}}>{lbl}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{background:"white",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
+                  <div style={{display:"grid",gridTemplateColumns:`${mob?70:100}px 1fr 1fr`,background:B.slateDark}}>
+                    <div style={{padding:"10px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:.5}}>Sala</div>
+                    {["Mañana","Tarde"].map(t=><div key={t} style={{padding:"10px 12px",fontSize:11,fontWeight:700,color:"white",textTransform:"uppercase",letterSpacing:.5,borderLeft:"1px solid rgba(255,255,255,.1)"}}>{t}</div>)}
+                  </div>
+                  {SALAS_CONSULTA.map((sala,si)=>(
+                    <div key={sala} style={{display:"grid",gridTemplateColumns:`${mob?70:100}px 1fr 1fr`,borderBottom:si<SALAS_CONSULTA.length-1?`1px solid ${B.border}`:"none"}}>
+                      <div style={{padding:"12px",fontWeight:700,fontSize:13,color:B.slateDark,display:"flex",alignItems:"center",background:"#FAFBFC",borderRight:`1px solid ${B.border}`}}>{sala}</div>
+                      {["mañana","tarde"].map(turno=>{
+                        const rec=getConsRec(sala,consDate,turno);
+                        const est=getEst(rec);
+                        const isEd=consEditSlot?.sala===sala&&consEditSlot?.turno===turno;
+                        return(
+                          <div key={turno} style={{borderLeft:`1px solid ${B.border}`}}>
+                            <div onClick={()=>canCreate&&setConsEditSlot(isEd?null:{sala,turno})}
+                              style={{padding:"10px 12px",background:eColor[est],cursor:canCreate?"pointer":"default",display:"flex",alignItems:"center",gap:8,minHeight:52,transition:"filter .1s"}}
+                              onMouseEnter={e=>{if(canCreate)e.currentTarget.style.filter="brightness(.97)";}}
+                              onMouseLeave={e=>{e.currentTarget.style.filter="none";}}>
+                              <div style={{width:10,height:10,borderRadius:"50%",background:eDot[est],flexShrink:0,border:`1px solid ${est==="blank"?B.border:"transparent"}`}}/>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:600,color:eTxt[est]}}>{eLabel[est]}</div>
+                                {rec?.cirujano&&<div style={{fontSize:11,color:B.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🔪 {rec.cirujano}</div>}
+                              </div>
+                              {canCreate&&<span style={{fontSize:10,color:B.muted,flexShrink:0}}>{isEd?"▲":"▼"}</span>}
+                            </div>
+                            {isEd&&(
+                              <div style={{padding:"10px 12px",background:"#F8FAFC",borderTop:`1px solid ${B.border}`,display:"flex",flexDirection:"column",gap:7}}>
+                                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                                  {est==="blank"&&<><button onClick={()=>saveConsultaEstado(consHosp,sala,consDate,turno,"abierta","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:"1px solid #86EFAC",background:"#F0FDF4",fontSize:11,fontWeight:600,cursor:"pointer",color:"#166534"}}>✓ Abrir</button><button onClick={()=>saveConsultaEstado(consHosp,sala,consDate,turno,"cerrada","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:"1px solid #FECACA",background:"#FEF2F2",fontSize:11,fontWeight:600,cursor:"pointer",color:"#B91C1C"}}>🔒 Cerrada</button></>}
+                                  {est==="cerrada"&&<><button onClick={()=>saveConsultaEstado(consHosp,sala,consDate,turno,"abierta","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:"1px solid #86EFAC",background:"#F0FDF4",fontSize:11,fontWeight:600,cursor:"pointer",color:"#166534"}}>✓ Abrir</button><button onClick={()=>saveConsultaEstado(consHosp,sala,consDate,turno,"blank","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:`1px solid ${B.border}`,background:"white",fontSize:11,fontWeight:600,cursor:"pointer",color:B.muted}}>✕ Quitar</button></>}
+                                  {(est==="abierta"||est==="asignada")&&<button onClick={()=>saveConsultaEstado(consHosp,sala,consDate,turno,"cerrada","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:"1px solid #FECACA",background:"#FEF2F2",fontSize:11,fontWeight:600,cursor:"pointer",color:"#B91C1C"}}>🔒 Cerrar</button>}
+                                  {(est==="abierta"||est==="asignada")&&<button onClick={()=>saveConsultaEstado(consHosp,sala,consDate,turno,"blank","")} disabled={saving} style={{padding:"4px 9px",borderRadius:6,border:`1px solid ${B.border}`,background:"white",fontSize:11,fontWeight:600,cursor:"pointer",color:B.muted}}>✕ Quitar</button>}
+                                </div>
+                                {(est==="abierta"||est==="asignada")&&(
+                                  <select className="inp" style={{padding:"5px 8px",fontSize:12}} value={rec?.cirujano||""} onChange={e=>saveConsultaEstado(consHosp,sala,consDate,turno,"abierta",e.target.value)}>
+                                    <option value="">— Sin asignar —</option>
+                                    {personal.map(p=><option key={p.id}>{p.nombre}</option>)}
+                                  </select>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

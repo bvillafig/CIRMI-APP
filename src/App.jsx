@@ -651,7 +651,6 @@ export default function App(){
                     ))}
                   </div>
                 </div>
-              </div>
 
               {/* Alertas proactivas */}
               {alertasProact.length>0&&(
@@ -678,6 +677,7 @@ export default function App(){
                 <div onClick={toggleNotifProactivas} style={{width:40,height:22,borderRadius:11,background:notifProactivas?B.slate:B.border,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
                   <div style={{position:"absolute",top:3,left:notifProactivas?20:3,width:16,height:16,borderRadius:"50%",background:"white",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
                 </div>
+              </div>
               </div>
             );
           })()}

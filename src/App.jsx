@@ -353,7 +353,13 @@ export default function App(){
   const exportarCSVMes=()=>{const hoy=new Date();const cxs=cirugias.filter(c=>{const d=new Date(c.fecha+'T12:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear()&&(filtFact==="Todos"||c.factura===filtFact);}).sort((a,b)=>a.fecha.localeCompare(b.fecha));const hdr=["ID","Fecha","Tipo","Paciente","Cirujano","Ayudante","Enfermera","Hospital","Quirófano","Estado","Factura","Material","Observaciones"];const rows=cxs.map(c=>[c.id,c.fecha,c.tipo||"",c.paciente||"",c.cirujano||"",c.ayudante||"",c.enfermera||"",c.hospital||"",c.quirofano||"",c.estado||"",c.factura||"",c.material||"",(c.obs||"").replace(/,/g,";")]);const csv=[hdr,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`CIRMI-${MESES[hoy.getMonth()]}-${hoy.getFullYear()}.csv`;a.click();URL.revokeObjectURL(url);};
 
   // ── Cirugías ──
-  const openNewCx=(fecha=selDate)=>{setForm({id:newId(),fecha,hospital:hospNames[0]||"",quirofano:"Q-1",tipo:"",cirujano:personal[0]?.nombre||"",ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});setModal("cx_n");};
+  const openNewCx=(fecha,opts={})=>{
+    const f=fecha||(tab==="quirofanos"?quirDate:tab==="consultas"?consDate:selDate);
+    const hosp=opts.hospital||(tab==="quirofanos"?quirHosp:tab==="consultas"?consHosp:tab==="guardias"?guardHosp:null)||hospNames[0]||"";
+    const quir=opts.quirofano||"Q-1";
+    setForm({id:newId(),fecha:f,hospital:hosp,quirofano:quir,tipo:"",cirujano:personal[0]?.nombre||"",ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});
+    setModal("cx_n");
+  };
   const saveCx=async()=>{
     const turno=turnoFromHora(form.inicio);
     if(form.fecha&&form.quirofano&&form.inicio&&form.hospital&&esCerradoQuir(form.hospital,form.quirofano,form.fecha,turno)){
@@ -422,7 +428,7 @@ export default function App(){
   // ── Quirófanos / Consultas ──
   const turnoFromHora=(inicio)=>inicio&&inicio<"15:00"?"mañana":"tarde";
   // Cerrado por defecto: sin registro = cerrado; registro con cerrado=false = abierto
-  const esCerradoQuir=(hosp,q,fecha,turno)=>{const r=quirEstados.find(e=>e.hospital===hosp&&e.quirofano===q&&e.fecha===fecha&&e.turno===turno);return!r||r.cerrado;};
+  const esCerradoQuir=(hosp,q,fecha,turno)=>{const r=quirEstados.find(e=>e.hospital===hosp&&e.quirofano===q&&e.fecha===fecha&&e.turno===turno);return r?.cerrado===true;};
   const esCerradoCons=(hosp,s,fecha,turno)=>{const r=consEstados.find(e=>e.hospital===hosp&&e.sala===s&&e.fecha===fecha&&e.turno===turno);return!r||r.cerrado;};
   const saveQuirofanoEstado=async(hospital,quirofano,fecha,turno,estadoNuevo,cirujano="")=>{
     const ex=quirEstados.find(e=>e.hospital===hospital&&e.quirofano===quirofano&&e.fecha===fecha&&e.turno===turno);
@@ -495,7 +501,8 @@ export default function App(){
   const sugPend=sugerencias.filter(s=>s.estado==="pendiente");
   const alertasProact=notifProactivas?[
     ...cirugias.filter(c=>{const diff=(new Date(c.fecha+'T12:00:00')-today)/86400000;return diff>=0&&diff<=2&&c.estado!=="Cancelada"&&(!c.ayudante||!c.enfermera);}).map(c=>({tipo:"cx",msg:`Cirugía ${c.fecha} — ${c.tipo||"sin tipo"}: ${[!c.ayudante&&"sin ayudante",!c.enfermera&&"sin enfermera"].filter(Boolean).join(" y ")} · ${c.hospital}`})),
-    ...hospNames.flatMap(h=>{const n14=Array.from({length:14},(_,i)=>{const d=new Date(today);d.setDate(d.getDate()+i);return fmt(d);}).filter(f=>!guardias.find(g=>g.fecha===f&&g.hospital===h)).length;return n14>2?[{tipo:"guardia",msg:`${n14} días sin guardia asignada en los próximos 14 días · ${h}`}]:[];})
+    ...hospNames.flatMap(h=>{const n14=Array.from({length:14},(_,i)=>{const d=new Date(today);d.setDate(d.getDate()+i);return fmt(d);}).filter(f=>!guardias.find(g=>g.fecha===f&&g.hospital===h)).length;return n14>2?[{tipo:"guardia",msg:`${n14} días sin guardia asignada en los próximos 14 días · ${h}`}]:[];}),
+    ...cirugias.filter(c=>c.fecha>=todayStr&&c.estado!=="Cancelada"&&esCerradoQuir(c.hospital,c.quirofano,c.fecha,turnoFromHora(c.inicio))).map(c=>({tipo:"quir",msg:`${c.quirofano} CERRADO con cirugía agendada: ${c.tipo||"sin tipo"} el ${c.fecha} ${c.inicio}–${c.fin} · ${c.hospital}`,fecha:c.fecha})),
   ]:[];
   const cxProg=cirugias.filter(c=>(filtCir==="Todos"||c.cirujano===filtCir||c.ayudante===filtCir)&&(filtCli==="Todos"||c.hospital===filtCli)).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.inicio.localeCompare(b.inicio));
   const docsFilt=documentos.filter(d=>filtCat==="Todos"||d.categoria===filtCat);
@@ -753,9 +760,10 @@ export default function App(){
                     <div style={{fontWeight:700,fontSize:13,color:B.goldDark}}>Alertas ({alertasProact.length})</div>
                   </div>
                   {alertasProact.map((a,i)=>(
-                    <div key={i} style={{padding:"9px 16px",borderBottom:i<alertasProact.length-1?`1px solid ${B.border}`:"none",fontSize:12,color:B.text,display:"flex",gap:8,alignItems:"flex-start"}}>
-                      <span style={{fontSize:13,flexShrink:0}}>{a.tipo==="cx"?"🔪":"🛡️"}</span>
-                      <span>{a.msg}</span>
+                    <div key={i} style={{padding:"9px 16px",borderBottom:i<alertasProact.length-1?`1px solid ${B.border}`:"none",fontSize:12,color:a.tipo==="quir"?"#B91C1C":B.text,display:"flex",gap:8,alignItems:"flex-start",background:a.tipo==="quir"?"#FEF2F2":"transparent"}}>
+                      <span style={{fontSize:13,flexShrink:0}}>{a.tipo==="cx"?"🔪":a.tipo==="quir"?"⛔":"🛡️"}</span>
+                      <span style={{flex:1}}>{a.msg}</span>
+                      {a.tipo==="quir"&&a.fecha&&<button onClick={()=>{setSelDate(a.fecha);setTab("agenda");}} style={{flexShrink:0,padding:"2px 8px",borderRadius:6,border:"1px solid #FECACA",background:"white",fontSize:11,color:"#B91C1C",cursor:"pointer",fontWeight:600}}>Ver →</button>}
                     </div>
                   ))}
                 </div>
@@ -841,6 +849,7 @@ export default function App(){
                           <div style={{fontSize:12,color:B.muted,marginTop:3}}>{c.hospital} · {c.quirofano}</div>
                           <div style={{fontSize:12,color:B.muted}}>🔪 {c.cirujano}{c.ayudante&&` · 🤝 ${c.ayudante}`}</div>
                           {c.obs&&<div style={{fontSize:11,color:B.goldDark,marginTop:2}}>⚠ {c.obs}</div>}
+                          {esCerradoQuir(c.hospital,c.quirofano,c.fecha,turnoFromHora(c.inicio))&&<div style={{fontSize:11,color:"#B91C1C",marginTop:2,fontWeight:600}}>⛔ {c.quirofano} cerrado · <button onClick={e=>{e.stopPropagation();setTab("quirofanos");setQuirHosp(c.hospital);setQuirDate(c.fecha);}} style={{border:"none",background:"none",color:"#B91C1C",fontSize:11,fontWeight:600,cursor:"pointer",padding:0,textDecoration:"underline"}}>Abrir quirófano →</button></div>}
                         </div>
                         <Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/>
                       </div>
@@ -1054,11 +1063,11 @@ export default function App(){
                     <button className="btn-sec" onClick={exportICSQuirofanos} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📅 .ics</button>
                   </div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                    {hospNames.map((h,i)=><button key={h} onClick={()=>setSelHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:selHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:selHosp===h?"white":B.slate,borderColor:selHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
+                    {hospNames.map((h,i)=><button key={h} onClick={()=>{setSelHosp(h);setQuirEditSlot(null);}} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:selHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:selHosp===h?"white":B.slate,borderColor:selHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   </div>
                 </div>
 
-                {/* Calendario — solo muestra días con algún slot ABIERTO */}
+                {/* Calendario */}
                 <CalMes year={calY} month={calM2}
                   onPrev={()=>prevM(calY,calM2,...setPrevNext)}
                   onNext={()=>nextM(calY,calM2,...setPrevNext)}
@@ -1148,7 +1157,7 @@ export default function App(){
                                   <span style={{fontSize:11,fontWeight:600,color:labelColor}}>{label}</span>
                                 </div>
                                 {cxCirujanos.length>0&&<div style={{fontSize:11,color:B.muted,marginTop:2}}>🔪 {cxCirujanos.join(", ")}</div>}
-                                {cxs.length>1&&<div style={{fontSize:10,color:B.muted}}>{cxs.length} intervenciones</div>}
+                                {cxs.length>0&&<button onClick={e=>{e.stopPropagation();setSelDate(selDia);setTab("agenda");}} style={{marginTop:3,padding:"2px 7px",borderRadius:5,border:`1px solid ${B.border}`,background:"white",fontSize:10,color:B.slate,cursor:"pointer",fontWeight:600}}>{cxs.length} cx · Ver agenda →</button>}
                               </div>
                               {canCreate&&(
                                 <button onClick={()=>setQuirEditSlot(isEd?null:{sala,turno})} disabled={saving}
@@ -1172,6 +1181,7 @@ export default function App(){
                                     {personal.map(p=><option key={p.id}>{p.nombre}</option>)}
                                   </select>
                                 )}
+                                {canCreate&&(est==="abierto"||est==="asignado")&&<button onClick={()=>openNewCx(selDia,{hospital:selHosp,quirofano:sala})} style={{padding:"4px 9px",borderRadius:6,border:`1px solid ${B.gold}`,background:B.goldLight,fontSize:11,fontWeight:600,cursor:"pointer",color:B.slateDark}}>+ Nueva cirugía</button>}
                               </div>
                             )}
                           </div>

@@ -1441,7 +1441,7 @@ export default function App(){
             <div>
               <div style={{marginBottom:16}}><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>⚙️ Configuración</h2><p style={{color:B.muted,fontSize:12,marginTop:2}}>Solo visible para administradores</p></div>
               <div style={{display:"flex",gap:2,marginBottom:18,borderBottom:`2px solid ${B.border}`,overflowX:"auto"}}>
-                {[["personal","👥 Personal"],["hospitales","🏨 Hospitales"],["usuarios","🔐 Usuarios"]].map(([id,l])=><button key={id} className={`subtab ${configTab===id?"active":""}`} onClick={()=>setConfigTab(id)}>{l}</button>)}
+                {[["personal","👥 Personal"],["hospitales","🏨 Hospitales"],["usuarios","🔐 Usuarios"],["auditoria","📋 Historial"]].map(([id,l])=><button key={id} className={`subtab ${configTab===id?"active":""}`} onClick={()=>setConfigTab(id)}>{l}</button>)}
               </div>
 
               {configTab==="personal"&&(
@@ -1523,6 +1523,64 @@ export default function App(){
                   })}
                 </div>
               )}
+
+              {configTab==="auditoria"&&(()=>{
+                const accionLabel={insert:"⊕ Creado",update:"✎ Editado",delete:"✕ Eliminado"};
+                const accionColor={insert:"#2E7D52",update:B.slate,delete:"#B91C1C"};
+                const tablaLabel={cirugias:"Cirugía",guardias:"Guardia",personal:"Personal",hospitales:"Hospital",ausencias:"Ausencia"};
+                const[audFiltTabla,setAudFiltTabla]=React.useState("todas");
+                const[audFiltAccion,setAudFiltAccion]=React.useState("todas");
+                const audFilt=auditoria.filter(a=>(audFiltTabla==="todas"||a.tabla===audFiltTabla)&&(audFiltAccion==="todas"||a.accion===audFiltAccion));
+                return(
+                  <div>
+                    <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+                      <select className="inp" style={{width:150,padding:"6px 10px",fontSize:12}} value={audFiltTabla} onChange={e=>setAudFiltTabla(e.target.value)}>
+                        <option value="todas">Todas las tablas</option>
+                        {["cirugias","guardias","personal","hospitales","ausencias"].map(t=><option key={t} value={t}>{tablaLabel[t]||t}</option>)}
+                      </select>
+                      <select className="inp" style={{width:140,padding:"6px 10px",fontSize:12}} value={audFiltAccion} onChange={e=>setAudFiltAccion(e.target.value)}>
+                        <option value="todas">Todas las acciones</option>
+                        <option value="insert">Creaciones</option>
+                        <option value="update">Ediciones</option>
+                        <option value="delete">Eliminaciones</option>
+                      </select>
+                      <span style={{fontSize:12,color:B.muted,marginLeft:"auto"}}>{audFilt.length} registros</span>
+                    </div>
+                    {audFilt.length===0?(
+                      <div style={{padding:"32px",textAlign:"center",color:B.muted,fontSize:13}}>Sin registros de auditoría{audFiltTabla!=="todas"||audFiltAccion!=="todas"?" con estos filtros":""}</div>
+                    ):(
+                      <div style={{background:"white",borderRadius:12,overflow:"hidden",border:`1px solid ${B.border}`}}>
+                        {audFilt.map((a,i)=>{
+                          const cambios=a.cambios||{};
+                          const camposCambiados=Object.keys(cambios).filter(k=>cambios[k]?.de!==undefined);
+                          return(
+                            <div key={a.id||i} style={{padding:"10px 14px",borderBottom:i<audFilt.length-1?`1px solid ${B.border}`:"none",background:i%2===0?"white":"#FAFBFC"}}>
+                              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
+                                    <span style={{fontSize:11,fontWeight:700,color:accionColor[a.accion]||B.muted}}>{accionLabel[a.accion]||a.accion}</span>
+                                    <span style={{fontSize:11,background:B.bg,color:B.slate,borderRadius:5,padding:"1px 6px",fontWeight:600}}>{tablaLabel[a.tabla]||a.tabla}</span>
+                                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:B.muted}}>{a.registro_id}</span>
+                                  </div>
+                                  {camposCambiados.length>0&&(
+                                    <div style={{fontSize:11,color:B.muted,marginTop:2}}>
+                                      {camposCambiados.map(k=><span key={k} style={{marginRight:8}}><strong>{k}:</strong> <span style={{textDecoration:"line-through",opacity:.6}}>{String(cambios[k].de).slice(0,20)}</span> → <span style={{color:B.text}}>{String(cambios[k].a).slice(0,20)}</span></span>)}
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{textAlign:"right",flexShrink:0}}>
+                                  <div style={{fontSize:12,fontWeight:600,color:B.slateDark}}>{a.usuario_nombre||"—"}</div>
+                                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:B.muted}}>{(a.created_at||"").slice(0,16).replace("T"," ")}</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </>)}

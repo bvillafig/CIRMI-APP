@@ -266,6 +266,7 @@ export default function App(){
   const handleLogout=async()=>{if(session)await authSignOut(session).catch(()=>{});localStorage.removeItem("cirmi_token");setSession(null);setAuthUser(null);setPerfil(null);};
 
   useEffect(()=>{if(session&&perfil?.estado==="aprobado")loadAll();},[session,perfil?.estado]);
+  useEffect(()=>{window.scrollTo({top:0,behavior:"smooth"});},[tab]);
 
   const loadAll=async()=>{
     setLoading(true);
@@ -797,7 +798,7 @@ export default function App(){
                       onClick:()=>{setSelDate(todayStr);setTab("agenda");}},
                     {label:"Esta semana",value:semMisCx.length,icon:"📅",
                       accent:semMisCx.length>0?B.slate:"#94A3B8",
-                      sub:proxCx&&proxCx.fecha!==todayStr?`Próxima: ${proxCx.fecha} · ${proxCx.inicio}`:"Sin próximas",
+                      sub:proxCx&&proxCx.fecha>todayStr?`Próxima: ${proxCx.fecha} · ${proxCx.inicio}`:hoyMisCx.length>0?"Todas hoy":"Sin cirugías",
                       onClick:()=>setTab("agenda")},
                     {label:"Total próximas",value:misCx.length,icon:"📊",
                       accent:B.slateDark,

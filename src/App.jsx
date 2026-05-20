@@ -56,6 +56,34 @@ const todayStr=fmt(today);
 const newId=()=>`CIR-${Date.now().toString().slice(-6)}`;
 const fmtSize=(b)=>b<1024?`${b}B`:b<1048576?`${(b/1024).toFixed(1)}KB`:`${(b/1048576).toFixed(1)}MB`;
 
+// ─── EMAILJS — notificación al admin ─────────────────────────
+// 1. Crear cuenta gratis en https://www.emailjs.com
+// 2. Añadir un servicio Gmail en Email Services
+// 3. Crear una plantilla con variables: {{nombre}}, {{email}}, {{url}}
+//    Asunto: "CIRMI – Nueva solicitud de acceso"
+//    Cuerpo: "{{nombre}} ({{email}}) ha solicitado acceso. Enlace: {{url}}"
+// 4. Rellenar las 3 constantes siguientes:
+const EMAILJS_SERVICE_ID  = "";   // ej. "service_abc123"
+const EMAILJS_TEMPLATE_ID = "";   // ej. "template_xyz456"
+const EMAILJS_PUBLIC_KEY  = "";   // ej. "AbCdEfGhIjKlMnOp"
+const ADMIN_EMAIL         = "b.villafig@gmail.com";
+
+const notifyAdminNewRequest=async(nombre,email)=>{
+  if(!EMAILJS_SERVICE_ID||!EMAILJS_TEMPLATE_ID||!EMAILJS_PUBLIC_KEY)return;
+  try{
+    await fetch("https://api.emailjs.com/api/v1.0/email/send",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        service_id:EMAILJS_SERVICE_ID,
+        template_id:EMAILJS_TEMPLATE_ID,
+        user_id:EMAILJS_PUBLIC_KEY,
+        template_params:{to_email:ADMIN_EMAIL,nombre:nombre||"Sin nombre",email,url:"https://cirmi-app.vercel.app"}
+      })
+    });
+  }catch{}
+};
+
 // ─── FESTIVOS CATALUÑA ────────────────────────────────────────
 const festivosCat=(year)=>{
   // Algoritmo Meeus/Jones/Butcher para Semana Santa
@@ -145,7 +173,7 @@ function AuthScreen({onAuth}){
       if(form.password!==form.confirm){setError("Las contraseñas no coinciden.");return;}
       if(form.password.length<6){setError("Mínimo 6 caracteres.");return;}
       setLoading(true);
-      try{const d=await authSignUp(form.email,form.password,form.nombre);if(d.error){setError(d.msg||"Error al registrarse.");return;}setSuccess("¡Registro completado! El administrador revisará tu solicitud.");setMode("login");}catch{setError("Error de conexión.");}finally{setLoading(false);}
+      try{const d=await authSignUp(form.email,form.password,form.nombre);if(d.error){setError(d.msg||"Error al registrarse.");return;}notifyAdminNewRequest(form.nombre,form.email);setSuccess("¡Registro completado! El administrador revisará tu solicitud.");setMode("login");}catch{setError("Error de conexión.");}finally{setLoading(false);}
     }
   };
   return(
@@ -534,7 +562,10 @@ export default function App(){
   const aprobarU=async(id)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const bloquearU=async(id)=>{if(!confirm("¿Bloquear?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const hacerAdmin=async(id)=>{if(!confirm("¿Dar permisos de admin?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol:"admin",rol_app:"admin"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
-  const cambiarRolApp=async(id,rolApp)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol_app:rolApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};;
+  const cambiarRolApp=async(id,rolApp)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol_app:rolApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+  const vincularPersonal=async(userId,personalNombre)=>{try{await fetch(`${API("perfiles")}?id=eq.${userId}`,{method:"PATCH",headers:H(session),body:JSON.stringify({nombre:personalNombre})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error al vincular.");}};
+  const aprobarYVincular=async(userId,personalNombre)=>{try{await fetch(`${API("perfiles")}?id=eq.${userId}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado",nombre:personalNombre||undefined})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+;
 
   // ── Export PDF semana ──
   const exportarSemana=()=>{
@@ -663,28 +694,54 @@ export default function App(){
             {/* Búsqueda */}
             <button onClick={()=>{setShowBusqueda(true);setQueryBusq("");}} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:16}}>🔍</button>
             {/* Notificaciones */}
-            <div style={{position:"relative"}}>
-              <button onClick={()=>setShowNotifs(!showNotifs)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:16,position:"relative"}}>
-                🔔
-                {unread>0&&<span style={{position:"absolute",top:-3,right:-3,background:"#EF4444",color:"white",borderRadius:10,padding:"0 4px",fontSize:9,fontWeight:700,minWidth:16,textAlign:"center"}}>{unread}</span>}
-              </button>
-              {showNotifs&&(
-                <div className="notif-panel">
-                  <div style={{padding:"12px 16px",borderBottom:`1px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontWeight:700,fontSize:14}}>Notificaciones</div>
-                    {unread>0&&<button className="btn-sec" style={{padding:"3px 8px",fontSize:11}} onClick={markAllRead}>Marcar leídas</button>}
-                  </div>
-                  <div style={{maxHeight:300,overflowY:"auto"}}>
-                    {notifs.length===0?<div style={{padding:"20px",textAlign:"center",color:B.muted,fontSize:13}}>Sin notificaciones</div>:notifs.map(n=>(
-                      <div key={n.id} onClick={()=>markRead(n.id)} style={{padding:"12px 16px",borderBottom:`1px solid ${B.border}`,background:n.leida?"white":"#F0F7FF",cursor:"pointer",transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=B.bg} onMouseLeave={e=>e.currentTarget.style.background=n.leida?"white":"#F0F7FF"}>
-                        <div style={{fontSize:13,lineHeight:1.5}}>{n.mensaje}</div>
-                        <div style={{fontSize:10,color:B.muted,marginTop:3}}>{n.created_at?.split("T")[0]}</div>
+            {(()=>{
+              const pendUsers=isAdmin?perfiles.filter(p=>p.estado==="pendiente"):[];
+              const totalBadge=unread+(pendUsers.length);
+              return(
+              <div style={{position:"relative"}}>
+                <button onClick={()=>setShowNotifs(!showNotifs)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:16,position:"relative"}}>
+                  🔔
+                  {totalBadge>0&&<span style={{position:"absolute",top:-3,right:-3,background:"#EF4444",color:"white",borderRadius:10,padding:"0 4px",fontSize:9,fontWeight:700,minWidth:16,textAlign:"center"}}>{totalBadge}</span>}
+                </button>
+                {showNotifs&&(
+                  <div className="notif-panel">
+                    <div style={{padding:"12px 16px",borderBottom:`1px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontWeight:700,fontSize:14}}>Notificaciones</div>
+                      {unread>0&&<button className="btn-sec" style={{padding:"3px 8px",fontSize:11}} onClick={markAllRead}>Marcar leídas</button>}
+                    </div>
+                    {/* Solicitudes pendientes de acceso — solo admin */}
+                    {pendUsers.length>0&&(
+                      <div style={{background:"#FFFBEB",borderBottom:`1px solid ${B.border}`}}>
+                        <div style={{padding:"8px 16px 4px",fontSize:10,fontWeight:700,color:B.goldDark,textTransform:"uppercase",letterSpacing:.5}}>
+                          ⏳ Solicitudes de acceso ({pendUsers.length})
+                        </div>
+                        {pendUsers.map(u=>(
+                          <div key={u.id} style={{padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,borderBottom:`1px solid ${B.goldLight}`}}>
+                            <div>
+                              <div style={{fontSize:13,fontWeight:600}}>{u.nombre||"Sin nombre"}</div>
+                              <div style={{fontSize:11,color:B.muted}}>{u.email}</div>
+                            </div>
+                            <button className="btn-green" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}}
+                              onClick={()=>{aprobarU(u.id);setShowNotifs(false);setTab("config");setConfigTab("usuarios");}}>
+                              ✓ Aprobar
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+                    <div style={{maxHeight:260,overflowY:"auto"}}>
+                      {notifs.length===0&&pendUsers.length===0?<div style={{padding:"20px",textAlign:"center",color:B.muted,fontSize:13}}>Sin notificaciones</div>:notifs.map(n=>(
+                        <div key={n.id} onClick={()=>markRead(n.id)} style={{padding:"12px 16px",borderBottom:`1px solid ${B.border}`,background:n.leida?"white":"#F0F7FF",cursor:"pointer",transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=B.bg} onMouseLeave={e=>e.currentTarget.style.background=n.leida?"white":"#F0F7FF"}>
+                          <div style={{fontSize:13,lineHeight:1.5}}>{n.mensaje}</div>
+                          <div style={{fontSize:10,color:B.muted,marginTop:3}}>{n.created_at?.split("T")[0]}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+              );
+            })()}
             {pendFact>0&&!mob&&isAdmin&&<div onClick={()=>{setTab("facturacion");setFiltFact("Pendiente");}} style={{background:B.goldLight,color:B.goldDark,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",border:`1px solid ${B.gold}`}}>⚠ {pendFact}</div>}
             {/* User */}
             {!mob&&<div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.1)",borderRadius:20,padding:"3px 10px 3px 5px"}}>
@@ -1555,7 +1612,10 @@ export default function App(){
           {/* ══ PERSONAL ══ */}
           {tab==="personal"&&(
             <div>
-              <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark,marginBottom:16}}>👥 Personal</h2>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+                <h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>👥 Personal</h2>
+                {isAdmin&&<button className="btn-gold" onClick={openNewP} style={{padding:"8px 16px",fontSize:13}}>+ Añadir profesional</button>}
+              </div>
               <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"repeat(2,1fr)",gap:13}}>
                 {personal.map(p=>{
                   const cxs=cirugias.filter(c=>[c.cirujano,c.ayudante,c.enfermera].includes(p.nombre));
@@ -1737,19 +1797,37 @@ export default function App(){
                               {estado==="bloqueado"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>Reactivar</button>}
                             </div>
                           </div>
-                          {/* Selector de rol — solo usuarios aprobados no admin */}
-                          {estado==="aprobado"&&u.rol!=="admin"&&(
-                            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${B.border}`,display:"flex",alignItems:"center",gap:8}}>
-                              <span style={{fontSize:11,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.5}}>Rol</span>
-                              <select className="inp" style={{flex:1,maxWidth:220,padding:"5px 8px",fontSize:12}}
-                                value={u.rol_app||""}
-                                onChange={e=>cambiarRolApp(u.id,e.target.value)}>
-                                <option value="">— Sin asignar —</option>
-                                <option value="cirujano_principal">Cirujano Principal</option>
-                                <option value="cirujano">Cirujano</option>
-                                <option value="enfermero">Enf. Instrumentista</option>
-                              </select>
-                              {u.rol_app&&<span style={{fontSize:11,color:"#2E7D52",fontWeight:600}}>✓ Asignado</span>}
+                          {/* Vincular con personal + selector de rol */}
+                          {u.rol!=="admin"&&(
+                            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${B.border}`,display:"flex",flexDirection:"column",gap:8}}>
+                              {/* Vincular con ficha de personal */}
+                              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                                <span style={{fontSize:11,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.5,whiteSpace:"nowrap"}}>Vincular a</span>
+                                <select className="inp" style={{flex:1,maxWidth:260,padding:"5px 8px",fontSize:12}}
+                                  value={personal.find(p=>p.nombre===u.nombre)?u.nombre:""}
+                                  onChange={e=>vincularPersonal(u.id,e.target.value)}>
+                                  <option value="">— Sin vincular —</option>
+                                  {personal.map(p=><option key={p.id} value={p.nombre}>{p.nombre} · {p.rol}</option>)}
+                                </select>
+                                {personal.find(p=>p.nombre===u.nombre)
+                                  ?<span style={{fontSize:11,color:"#2E7D52",fontWeight:600}}>✓ Vinculado</span>
+                                  :<span style={{fontSize:11,color:B.goldDark,fontWeight:600}}>⚠ Sin vincular</span>}
+                              </div>
+                              {/* Selector de rol — solo aprobados */}
+                              {estado==="aprobado"&&(
+                                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                  <span style={{fontSize:11,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.5}}>Rol app</span>
+                                  <select className="inp" style={{flex:1,maxWidth:220,padding:"5px 8px",fontSize:12}}
+                                    value={u.rol_app||""}
+                                    onChange={e=>cambiarRolApp(u.id,e.target.value)}>
+                                    <option value="">— Sin asignar —</option>
+                                    <option value="cirujano_principal">Cirujano Principal</option>
+                                    <option value="cirujano">Cirujano</option>
+                                    <option value="enfermero">Enf. Instrumentista</option>
+                                  </select>
+                                  {u.rol_app&&<span style={{fontSize:11,color:"#2E7D52",fontWeight:600}}>✓ Asignado</span>}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

@@ -71,17 +71,19 @@ const ADMIN_EMAIL         = "b.villafig@gmail.com";
 const notifyAdminNewRequest=async(nombre,email)=>{
   if(!EMAILJS_SERVICE_ID||!EMAILJS_TEMPLATE_ID||!EMAILJS_PUBLIC_KEY)return;
   try{
-    await fetch("https://api.emailjs.com/api/v1.0/email/send",{
+    const r=await fetch("https://api.emailjs.com/api/v1.0/email/send",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         service_id:EMAILJS_SERVICE_ID,
         template_id:EMAILJS_TEMPLATE_ID,
         user_id:EMAILJS_PUBLIC_KEY,
-        template_params:{to_email:ADMIN_EMAIL,nombre:nombre||"Sin nombre",email,url:"https://cirmi-app.vercel.app"}
+        template_params:{to_email:ADMIN_EMAIL,to_name:"Admin CIRMI",nombre:nombre||"Sin nombre",email,url:"https://cirmi-app.vercel.app"}
       })
     });
-  }catch{}
+    if(!r.ok){const t=await r.text();console.error("EmailJS error:",r.status,t);}
+    else console.log("EmailJS OK — solicitud enviada a",ADMIN_EMAIL);
+  }catch(e){console.error("EmailJS fetch error:",e);}
 };
 
 // ─── FESTIVOS CATALUÑA ────────────────────────────────────────

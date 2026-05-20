@@ -564,6 +564,8 @@ export default function App(){
   const aprobarU=async(id)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const bloquearU=async(id)=>{if(!confirm("¿Bloquear?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const hacerAdmin=async(id)=>{if(!confirm("¿Dar permisos de admin?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol:"admin",rol_app:"admin"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+  const rechazarU=async(id,nombre)=>{if(!confirm(`¿Rechazar la solicitud de ${nombre||"este usuario"}? Se bloqueará el acceso.`))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+  const eliminarU=async(id,nombre)=>{if(!confirm(`¿Eliminar el perfil de ${nombre||"este usuario"}? Esta acción no se puede deshacer.`))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"DELETE",headers:H(session)});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error al eliminar.");}};
   const cambiarRolApp=async(id,rolApp)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol_app:rolApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const vincularPersonal=async(userId,personalNombre)=>{try{await fetch(`${API("perfiles")}?id=eq.${userId}`,{method:"PATCH",headers:H(session),body:JSON.stringify({nombre:personalNombre})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error al vincular.");}};
   const aprobarYVincular=async(userId,personalNombre)=>{try{await fetch(`${API("perfiles")}?id=eq.${userId}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado",nombre:personalNombre||undefined})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
@@ -1794,9 +1796,11 @@ export default function App(){
                             </div>
                             <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
                               {estado==="pendiente"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>✓ Aprobar</button>}
+                              {estado==="pendiente"&&<button className="btn-sm-danger" onClick={()=>rechazarU(u.id,u.nombre||u.email)}>✗ Rechazar</button>}
                               {estado==="aprobado"&&u.id!==authUser?.id&&u.rol!=="admin"&&<button className="btn-sec" style={{padding:"4px 9px",fontSize:12}} onClick={()=>hacerAdmin(u.id)}>👑 Admin</button>}
-                              {u.id!==authUser?.id&&estado!=="bloqueado"&&<button className="btn-sm-danger" onClick={()=>bloquearU(u.id)}>Bloquear</button>}
+                              {u.id!==authUser?.id&&estado!=="bloqueado"&&estado!=="pendiente"&&<button className="btn-sm-danger" onClick={()=>bloquearU(u.id)}>Bloquear</button>}
                               {estado==="bloqueado"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>Reactivar</button>}
+                              {estado==="bloqueado"&&<button className="btn-sm-danger" style={{background:"#7F1D1D"}} onClick={()=>eliminarU(u.id,u.nombre||u.email)}>🗑 Eliminar</button>}
                             </div>
                           </div>
                           {/* Vincular con personal + selector de rol */}

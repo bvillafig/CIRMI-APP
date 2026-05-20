@@ -63,7 +63,7 @@ const fmtSize=(b)=>b<1024?`${b}B`:b<1048576?`${(b/1024).toFixed(1)}KB`:`${(b/104
 //    Asunto: "CIRMI – Nueva solicitud de acceso"
 //    Cuerpo: "{{nombre}} ({{email}}) ha solicitado acceso. Enlace: {{url}}"
 // 4. Rellenar las 3 constantes siguientes:
-const EMAILJS_SERVICE_ID  = "";   // ← PENDIENTE: ver instrucciones abajo
+const EMAILJS_SERVICE_ID  = "service_r0xpwwb";
 const EMAILJS_TEMPLATE_ID = "template_uonacsq";
 const EMAILJS_PUBLIC_KEY  = "_pafTs5pnWavoJ2W1";
 const ADMIN_EMAIL         = "b.villafig@gmail.com";

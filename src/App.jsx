@@ -56,6 +56,34 @@ const todayStr=fmt(today);
 const newId=()=>`CIR-${Date.now().toString().slice(-6)}`;
 const fmtSize=(b)=>b<1024?`${b}B`:b<1048576?`${(b/1024).toFixed(1)}KB`:`${(b/1048576).toFixed(1)}MB`;
 
+// ─── FESTIVOS CATALUÑA ────────────────────────────────────────
+const festivosCat=(year)=>{
+  // Algoritmo Meeus/Jones/Butcher para Semana Santa
+  const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,
+        f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,
+        ii=Math.floor(c/4),k=c%4,l=(32+2*e+2*ii-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
+  const emEaster=Math.floor((h+l-7*m+114)/31)-1,edEaster=((h+l-7*m+114)%31)+1;
+  const easter=new Date(year,emEaster,edEaster);
+  const off=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return fmt(x);};
+  const fijo=(m,d)=>`${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  return new Set([
+    fijo(1,1),          // Cap d'Any
+    fijo(1,6),          // Reis Mags
+    off(easter,-2),     // Divendres Sant
+    off(easter,1),      // Dilluns de Pasqua
+    fijo(5,1),          // Dia del Treball
+    fijo(6,24),         // Sant Joan
+    fijo(8,15),         // Assumpció
+    fijo(9,11),         // Diada Nacional de Catalunya
+    fijo(9,24),         // La Mercè
+    fijo(10,12),        // Festa Nacional d'Espanya
+    fijo(11,1),         // Tots Sants
+    fijo(12,6),         // Dia de la Constitució
+    fijo(12,8),         // Immaculada Concepció
+    fijo(12,25),        // Nadal
+    fijo(12,26),        // Sant Esteve
+  ]);
+};
 const ceColor=(e)=>({"Confirmada":"#2E7D52","Pendiente":"#9A6B00","Realizada":B.slate,"Cancelada":"#B91C1C"}[e]||B.muted);
 const bEst=(e)=>({"Confirmada":"#E6F4EC","Pendiente":B.goldLight,"Realizada":"#E8EDF2","Cancelada":"#FEE2E2"}[e]||"#F1F5F9");
 const cFact=(e)=>({"Pendiente":"#9A6B00","Facturada":B.slate,"En revisión":"#B91C1C","Cobrada":"#2E7D52"}[e]||B.muted);
@@ -71,7 +99,7 @@ const ColH=({children})=><div style={{fontSize:11,fontWeight:700,color:B.muted,t
 const Spin=({text="Cargando..."})=>(<div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"60px 0",gap:14}}><div style={{width:32,height:32,border:`3px solid ${B.border}`,borderTopColor:B.slate,borderRadius:"50%",animation:"spin 1s linear infinite"}}/><div style={{color:B.muted,fontSize:13}}>{text}</div></div>);
 
 // ─── CALENDARIO MENSUAL ────────────────────────────────────────
-function CalMes({year,month,renderDay,onPrev,onNext,onToday}){
+function CalMes({year,month,renderDay,onPrev,onNext,onToday,holidays}){
   const first=new Date(year,month,1),last=new Date(year,month+1,0);
   let sd=first.getDay()-1; if(sd<0)sd=6;
   const cells=[];
@@ -89,9 +117,10 @@ function CalMes({year,month,renderDay,onPrev,onNext,onToday}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
         {cells.map((day,i)=>{
-          if(!day)return<div key={`e${i}`} style={{minHeight:72,background:"#FAFBFC",borderRight:i%7<6?`1px solid ${B.border}`:"none",borderBottom:`1px solid ${B.border}`}}/>;
+          if(!day)return<div key={`e${i}`} style={{minHeight:72,background:"#EAECEF",borderRight:i%7<6?`1px solid ${B.border}`:"none",borderBottom:`1px solid ${B.border}`}}/>;
           const ds=fmt(new Date(year,month,day));
-          return renderDay({day,dateStr:ds,isToday:ds===todayStr,isWeekend:(i%7)>=5,col:i%7});
+          const isWE=(i%7)>=5;
+          return renderDay({day,dateStr:ds,isToday:ds===todayStr,isWeekend:isWE,isHoliday:!!(holidays?.has(ds)),col:i%7});
         })}
       </div>
     </div>
@@ -938,12 +967,14 @@ export default function App(){
                     onPrev={()=>prevM(calY,calM,setCalY,setCalM)}
                     onNext={()=>nextM(calY,calM,setCalY,setCalM)}
                     onToday={()=>{setCalY(today.getFullYear());setCalM(today.getMonth());setSelDate(todayStr);}}
-                    renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                    holidays={festivosCat(calY)}
+                    renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                       const dc=cirugias.filter(c=>c.fecha===dateStr),isSel=dateStr===selDate;
                       const porClinica=hospitales.map((h,idx)=>({nombre:h.nombre,color:ACCENTS[idx%ACCENTS.length],n:dc.filter(c=>c.hospital===h.nombre).length})).filter(x=>x.n>0);
-                      return(<div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isWeekend?"#FAFBFC":"white"}} onClick={()=>setSelDate(dateStr)}>
+                      return(<div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:(isWeekend||isHoliday)?"#EAECEF":"white"}} onClick={()=>setSelDate(dateStr)}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday&&!isSel?B.gold:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday&&!isSel?B.gold:"transparent",color:isSel?"white":isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                          {isHoliday&&!isSel&&<div style={{width:5,height:5,borderRadius:"50%",background:"#B91C1C",flexShrink:0}}/>}
                         </div>
                         {porClinica.length>0&&(
                           <div style={{display:"flex",flexWrap:"wrap",gap:2}}>
@@ -996,9 +1027,10 @@ export default function App(){
                     <div style={{display:"grid",gridTemplateColumns:mob?"repeat(7,1fr)":"repeat(7,1fr)",gap:mob?3:8,marginBottom:20}}>
                       {wDates.map((ds,i)=>{
                         const isT=ds===todayStr,isSel=ds===selDate;
+                        const isWE=i>=5,isHol=festivosCat(new Date(ds+'T12:00:00').getFullYear()).has(ds);
                         const cxDay=cirugias.filter(c=>c.fecha===ds&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst));
                         return(
-                          <div key={ds} onClick={()=>setSelDate(ds)} style={{background:isSel?"#EEF2F8":"white",borderRadius:10,border:`1.5px solid ${isT?B.gold:isSel?B.slate:B.border}`,padding:mob?"5px 4px":"8px 6px",cursor:"pointer",transition:"all .15s",minHeight:mob?52:88}}>
+                          <div key={ds} onClick={()=>setSelDate(ds)} style={{background:isSel?"#EEF2F8":(isWE||isHol)?"#EAECEF":"white",borderRadius:10,border:`1.5px solid ${isT?B.gold:isSel?B.slate:B.border}`,padding:mob?"5px 4px":"8px 6px",cursor:"pointer",transition:"all .15s",minHeight:mob?52:88}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                               <div style={{fontSize:mob?8:9,fontWeight:700,color:B.muted,textTransform:"uppercase"}}>{DIAS_H[i]}</div>
                               <div style={{width:mob?16:20,height:mob?16:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isT?B.gold:"transparent",color:isT?B.slateDark:B.text,fontWeight:isT?700:500,fontSize:mob?10:12}}>{new Date(ds+'T12:00:00').getDate()}</div>
@@ -1146,11 +1178,13 @@ export default function App(){
                 onPrev={()=>prevM(gY,gM,setGY,setGM)}
                 onNext={()=>nextM(gY,gM,setGY,setGM)}
                 onToday={()=>{setGY(today.getFullYear());setGM(today.getMonth());}}
-                renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                holidays={festivosCat(gY)}
+                renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                   const g=guardias.find(x=>x.fecha===dateStr&&x.hospital===guardHosp);
-                  return(<div key={dateStr} className="guard-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isToday?B.goldLight:g?"#E6F4EC":isWeekend?"#FAFBFC":"white"}} onClick={()=>isAdmin&&openGuardia(dateStr,guardHosp||hospNames[0])}>
+                  return(<div key={dateStr} className="guard-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isToday?B.goldLight:g?"#E6F4EC":(isWeekend||isHoliday)?"#EAECEF":"white"}} onClick={()=>isAdmin&&openGuardia(dateStr,guardHosp||hospNames[0])}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
-                      <div style={{width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday?B.gold:"transparent",color:isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday?700:400,fontSize:11}}>{day}</div>
+                      <div style={{width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday?B.gold:"transparent",color:isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text,fontWeight:isToday?700:400,fontSize:11}}>{day}</div>
+                      {isHoliday&&!g&&!isToday&&<div style={{width:5,height:5,borderRadius:"50%",background:"#B91C1C",flexShrink:0}}/>}
                       {g&&<div style={{width:7,height:7,borderRadius:"50%",background:"#2E7D52"}}/>}
                     </div>
                     {g?(<div style={{fontSize:mob?8:9,lineHeight:1.5}}>
@@ -1196,7 +1230,8 @@ export default function App(){
                   onPrev={()=>prevM(calY,calM2,...setPrevNext)}
                   onNext={()=>nextM(calY,calM2,...setPrevNext)}
                   onToday={()=>{setPrevNext[0](today.getFullYear());setPrevNext[1](today.getMonth());setSelDia(todayStr);}}
-                  renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                  holidays={festivosCat(calY)}
+                  renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                     const isSel=dateStr===selDia;
                     const salaInfos=salas.map(s=>{
                       const recM=getQuirRec(s,dateStr,"mañana");
@@ -1218,16 +1253,18 @@ export default function App(){
                     const hasOpen=salaInfos.some(x=>x.isOpen);
                     const asigDots=salaInfos.filter(x=>x.cirColor); // incluye cerrados con cirujano
                     let dayBg="white";
+                    if(isWeekend||isHoliday)dayBg="#EAECEF";
                     if(hasCerrado)dayBg="#FCA5A5";
                     if(hasCirugias&&!hasCerrado)dayBg="#FCD34D";
                     if(hasOpen&&!hasCirugias&&!hasCerrado)dayBg="#86EFAC";
                     if(isToday&&!isSel)dayBg=B.goldLight;
                     if(isSel)dayBg=B.slateDark;
-                    const numColor=isSel?"white":hasCerrado?"#7F1D1D":hasCirugias?"#78350F":hasOpen?"#14532D":isToday?B.slateDark:isWeekend?B.muted:B.text;
+                    const numColor=isSel?"white":hasCerrado?"#7F1D1D":hasCirugias?"#78350F":hasOpen?"#14532D":isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text;
                     return(
                       <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:dayBg}} onClick={()=>setSelDia(dateStr)}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                           <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:numColor,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                          {isHoliday&&!isSel&&!hasOpen&&!hasCerrado&&!hasCirugias&&<div style={{width:5,height:5,borderRadius:"50%",background:"#B91C1C",flexShrink:0}}/>}
                         </div>
                         {asigDots.length>0&&(
                           <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
@@ -1249,9 +1286,10 @@ export default function App(){
 
                 {/* Leyenda */}
                 <div style={{display:"flex",gap:14,marginBottom:12,flexWrap:"wrap"}}>
-                  {[["#86EFAC","#14532D","Abierto sin cirugías"],["#FCD34D","#78350F","Abierto con cirugías"],["#FCA5A5","#7F1D1D","Cerrado"]].map(([bg,col,l])=>(
-                    <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:14,borderRadius:4,background:bg}}/><span style={{fontSize:11,color:B.muted}}>{l}</span></div>
+                  {[["#86EFAC","#14532D","Abierto sin cirugías"],["#FCD34D","#78350F","Abierto con cirugías"],["#FCA5A5","#7F1D1D","Cerrado"],["#EAECEF",B.muted,"Fin de semana / Festivo"]].map(([bg,col,l])=>(
+                    <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:14,borderRadius:4,background:bg,border:`1px solid ${B.border}`}}/><span style={{fontSize:11,color:B.muted}}>{l}</span></div>
                   ))}
+                  <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:5,height:5,borderRadius:"50%",background:"#B91C1C"}}/><span style={{fontSize:11,color:B.muted}}>festivo cataluña</span></div>
                   <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:9,height:9,borderRadius:"50%",background:"#4A6079",boxShadow:"0 0 0 1.5px rgba(0,0,0,.2)"}}/><span style={{fontSize:11,color:B.muted}}>● cirujano asignado</span></div>
                 </div>
 
@@ -1347,13 +1385,15 @@ export default function App(){
                   onPrev={()=>prevM(consY,consM,setConsY,setConsM)}
                   onNext={()=>nextM(consY,consM,setConsY,setConsM)}
                   onToday={()=>{setConsY(today.getFullYear());setConsM(today.getMonth());setConsDate(todayStr);}}
-                  renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                  holidays={festivosCat(consY)}
+                  renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                     const isSel=dateStr===consDate;
                     const dots=SALAS_CONSULTA.flatMap(s=>["mañana","tarde"].map(t=>{const r=getConsRec(s,dateStr,t);return getEst(r);})).filter(e=>e!=="blank");
                     return(
-                      <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:isWeekend?"#FAFBFC":"white"}} onClick={()=>{setConsDate(dateStr);setConsEditSlot(null);}}>
+                      <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:(isWeekend||isHoliday)?"#EAECEF":"white"}} onClick={()=>{setConsDate(dateStr);setConsEditSlot(null);}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                          <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                          {isHoliday&&!isSel&&dots.length===0&&<div style={{width:5,height:5,borderRadius:"50%",background:"#B91C1C",flexShrink:0}}/>}
                         </div>
                         {dots.length>0&&(
                           <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
@@ -1448,14 +1488,16 @@ export default function App(){
                 onPrev={()=>prevM(hospY,hospM,setHospY,setHospM)}
                 onNext={()=>nextM(hospY,hospM,setHospY,setHospM)}
                 onToday={()=>{setHospY(today.getFullYear());setHospM(today.getMonth());setSelDate(todayStr);}}
-                renderDay={({day,dateStr,isToday,isWeekend,col})=>{
+                holidays={festivosCat(hospY)}
+                renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                   const isSel=dateStr===selDate;
                   const hospDots=hospitales.map((h,idx)=>({h,color:ACCENTS[idx%ACCENTS.length],n:cirugias.filter(c=>c.hospital===h.nombre&&c.fecha===dateStr).length})).filter(x=>x.n>0);
                   const total=hospDots.reduce((s,x)=>s+x.n,0);
                   return(
-                    <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:isWeekend?"#FAFBFC":"white"}} onClick={()=>setSelDate(dateStr)}>
+                    <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:(isWeekend||isHoliday)?"#EAECEF":"white"}} onClick={()=>setSelDate(dateStr)}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
-                        <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:isWeekend?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                        <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:isSel?"white":isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12}}>{day}</div>
+                        {isHoliday&&!isSel&&total===0&&<div style={{width:5,height:5,borderRadius:"50%",background:"#B91C1C",flexShrink:0}}/>}
                         {total>0&&<span style={{fontSize:9,fontWeight:700,background:isSel?"rgba(255,255,255,.25)":B.slateLight,color:"white",borderRadius:8,padding:"1px 4px"}}>{total}</span>}
                       </div>
                       {hospDots.length>0&&(

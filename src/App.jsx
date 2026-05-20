@@ -206,6 +206,8 @@ export default function App(){
   const[showAusForm,setShowAusForm]=useState(false);
   const[consEditSlot,setConsEditSlot]=useState(null);
   const[quirEditSlot,setQuirEditSlot]=useState(null);
+  const[showMiAusForm,setShowMiAusForm]=useState(false);
+  const[miAusForm,setMiAusForm]=useState({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});
   const[notifProactivas,setNotifProactivas]=useState(()=>localStorage.getItem("cirmi_notif_proact")!=="false");
   const[audFiltTabla,setAudFiltTabla]=useState("todas");
   const[audFiltAccion,setAudFiltAccion]=useState("todas");
@@ -281,6 +283,21 @@ export default function App(){
   };
   const addAusencia=async()=>{if(!ausForm.fecha_inicio||!ausForm.fecha_fin||ausForm.fecha_fin<ausForm.fecha_inicio){alert("Fechas inválidas.");return;}setSaving(true);try{await dbInsert("ausencias",{personal_id:form.id,personal_nombre:form.nombre,fecha_inicio:ausForm.fecha_inicio,fecha_fin:ausForm.fecha_fin,motivo:ausForm.motivo||""},session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);setShowAusForm(false);setAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}catch{alert("Error.");}finally{setSaving(false);}};
   const delAusencia=async(id)=>{if(!confirm("¿Eliminar ausencia?"))return;try{await dbDelete("ausencias",id,session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);}catch{alert("Error.");}};
+  const addMiAusencia=async()=>{
+    if(!miAusForm.fecha_inicio||!miAusForm.fecha_fin||miAusForm.fecha_fin<miAusForm.fecha_inicio){alert("Fechas inválidas.");return;}
+    const miP=personal.find(p=>p.nombre===perfil?.nombre);
+    setSaving(true);
+    try{
+      await dbInsert("ausencias",{personal_id:miP?.id||null,personal_nombre:perfil?.nombre||"",fecha_inicio:miAusForm.fecha_inicio,fecha_fin:miAusForm.fecha_fin,motivo:miAusForm.motivo||""},session);
+      const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);
+      setShowMiAusForm(false);setMiAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});
+    }catch{alert("Error al guardar.");}finally{setSaving(false);}
+  };
+  // Opciones de personal para selects — ausentes deshabilitadas según fecha
+  const pOpts=(fecha,inclVacio=false,emptyLabel="— Sin asignar —",filtroRol=null)=>{
+    const lista=filtroRol?personal.filter(p=>p.rol?.includes(filtroRol)):personal;
+    return(<>{inclVacio&&<option value="">{emptyLabel}</option>}{lista.map(p=>{const aus=fecha&&estaAusente(p.nombre,fecha);return<option key={p.id} value={p.nombre} disabled={aus}>{p.nombre}{aus?" (no disponible)":""}</option>;})}</>);
+  };
   const toggleNotifProactivas=()=>{const v=!notifProactivas;setNotifProactivas(v);localStorage.setItem("cirmi_notif_proact",String(v));};
 
   // ── Exportar .ics ──
@@ -366,6 +383,8 @@ export default function App(){
       alert(`⛔ ${form.quirofano} está cerrado para el turno ${turno} del ${form.fecha}.\nAbrí el quirófano antes de agendar.`);
       return;
     }
+    const ausentes=[form.cirujano,form.ayudante,form.enfermera].filter(Boolean).filter(n=>estaAusente(n,form.fecha));
+    if(ausentes.length>0){alert(`⛔ ${ausentes.join(", ")} no está${ausentes.length>1?"n":""} disponible${ausentes.length>1?"s":""} el ${form.fecha}.`);return;}
     setSaving(true);try{if(modal==="cx_n"){await dbInsert("cirugias",form);await logAudit("cirugias",form.id,"insert",{tipo:form.tipo,fecha:form.fecha,hospital:form.hospital});}else{const prev=cirugias.find(c=>c.id===form.id);const{id,...d}=form;await dbUpdate("cirugias",id,d);if(prev){const ch={};["tipo","fecha","inicio","fin","hospital","cirujano","ayudante","enfermera","paciente","estado","factura","obs","quirofano"].forEach(k=>{if(String(prev[k]||"")!==String(form[k]||""))ch[k]={de:prev[k]||"",a:form[k]||""};});if(Object.keys(ch).length>0)await logAudit("cirugias",id,"update",ch);}}await loadAll();setModal(null);}catch{alert("Error al guardar.");}finally{setSaving(false);};
   };;
   const delCx=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await logAudit("cirugias",id,"delete",{});await dbDelete("cirugias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
@@ -374,7 +393,11 @@ export default function App(){
 
   // ── Guardias ──
   const openGuardia=(fecha,hospital)=>{const e=guardias.find(g=>g.fecha===fecha&&g.hospital===hospital);setForm(e?{...e}:{fecha,hospital,cirujano_principal:"",cirujano_ayudante:"",notas:""});setModal("g_edit");};
-  const saveGuardia=async()=>{setSaving(true);try{if(form.id){const{id,...d}=form;await dbUpdate("guardias",id,d);}else await dbInsert("guardias",form);await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);};};
+  const saveGuardia=async()=>{
+    const ausentes=[form.cirujano_principal,form.cirujano_ayudante].filter(Boolean).filter(n=>estaAusente(n,form.fecha));
+    if(ausentes.length>0){alert(`⛔ ${ausentes.join(", ")} no está${ausentes.length>1?"n":""} disponible${ausentes.length>1?"s":""} el ${form.fecha}.`);return;}
+    setSaving(true);try{if(form.id){const{id,...d}=form;await dbUpdate("guardias",id,d);}else await dbInsert("guardias",form);await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);};
+  };;
   const delGuardia=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("guardias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
 
   // ── Sugerencias de guardia ──
@@ -809,6 +832,49 @@ export default function App(){
                     ))}
                   </div>
                 </div>
+
+              {/* Mi disponibilidad */}
+              {(()=>{
+                const misAus=ausencias.filter(a=>a.personal_nombre===miNombre&&a.fecha_fin>=todayStr).sort((a,b)=>a.fecha_inicio.localeCompare(b.fecha_inicio));
+                return(
+                  <div style={{marginTop:16,background:"white",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
+                    <div style={{padding:"12px 16px",borderBottom:`1px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:14,color:B.slateDark}}>📅 Mi disponibilidad</div>
+                        <div style={{fontSize:11,color:B.muted,marginTop:1}}>Días no disponible · los bloqueados no se pueden asignar en cirugías ni guardias</div>
+                      </div>
+                      <button className="btn-sec" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}} onClick={()=>{setShowMiAusForm(!showMiAusForm);setMiAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}}>+ Añadir</button>
+                    </div>
+                    {showMiAusForm&&(
+                      <div style={{padding:"12px 16px",background:B.bg,borderBottom:`1px solid ${B.border}`,display:"flex",flexDirection:"column",gap:9}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                          <FG label="Desde"><input type="date" className="inp" value={miAusForm.fecha_inicio} min={todayStr} onChange={e=>setMiAusForm({...miAusForm,fecha_inicio:e.target.value})}/></FG>
+                          <FG label="Hasta"><input type="date" className="inp" value={miAusForm.fecha_fin} min={miAusForm.fecha_inicio||todayStr} onChange={e=>setMiAusForm({...miAusForm,fecha_fin:e.target.value})}/></FG>
+                        </div>
+                        <FG label="Motivo (opcional)"><input className="inp" value={miAusForm.motivo} onChange={e=>setMiAusForm({...miAusForm,motivo:e.target.value})} placeholder="Vacaciones, baja médica, congreso..."/></FG>
+                        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                          <button className="btn-sec" style={{fontSize:12}} onClick={()=>setShowMiAusForm(false)}>Cancelar</button>
+                          <button className="btn-gold" style={{fontSize:12}} onClick={addMiAusencia} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
+                        </div>
+                      </div>
+                    )}
+                    {misAus.length===0?(
+                      <div style={{padding:"18px 16px",fontSize:12,color:B.muted,fontStyle:"italic"}}>Sin períodos de no disponibilidad registrados</div>
+                    ):misAus.map(a=>(
+                      <div key={a.id} style={{padding:"10px 16px",borderBottom:`1px solid ${B.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{width:8,height:8,borderRadius:"50%",background:"#B91C1C",flexShrink:0}}/>
+                          <div>
+                            <div style={{fontSize:12,fontWeight:600,color:B.text}}>{a.fecha_inicio===a.fecha_fin?a.fecha_inicio:`${a.fecha_inicio} → ${a.fecha_fin}`}</div>
+                            {a.motivo&&<div style={{fontSize:11,color:B.muted}}>{a.motivo}</div>}
+                          </div>
+                        </div>
+                        <button onClick={()=>delAusencia(a.id)} style={{border:"none",background:"transparent",cursor:"pointer",color:"#B91C1C",fontSize:14,padding:"2px 8px",borderRadius:6,flexShrink:0}}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Alertas proactivas */}
               {alertasProact.length>0&&(
@@ -1722,7 +1788,7 @@ export default function App(){
                 <button onClick={()=>setModal(null)} style={{border:"none",background:B.bg,borderRadius:7,width:28,height:28,fontSize:16,color:B.muted,cursor:"pointer"}}>×</button>
               </div>
               <div className="form-grid">
-                {[["Fecha",<input type="date" className="inp" value={form.fecha||""} onChange={e=>setForm({...form,fecha:e.target.value})}/>],["Hospital",<select className="inp" value={form.hospital||""} onChange={e=>setForm({...form,hospital:e.target.value})}>{hospNames.map(h=><option key={h}>{h}</option>)}</select>],["Quirófano",<select className="inp" value={form.quirofano||""} onChange={e=>setForm({...form,quirofano:e.target.value})}>{"Q-1,Q-2,Q-3,Q-4".split(",").map(q=><option key={q}>{q}</option>)}</select>],["Tipo de cirugía",<input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/>],["Hora inicio",<input type="time" className="inp" value={form.inicio||""} onChange={e=>setForm({...form,inicio:e.target.value})}/>],["Hora fin",<input type="time" className="inp" value={form.fin||""} onChange={e=>setForm({...form,fin:e.target.value})}/>],["Cirujano",<select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Ayudante",<select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}><option value="">— Sin ayudante —</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Enfermera",<select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}><option value="">— Sin asignar —</option>{personal.filter(p=>p.rol?.includes("Enf")).map(p=><option key={p.id}>{p.nombre}</option>)}</select>],["Código paciente",<input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="PAC-2025-XXX"/>],["Estado",<select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select>],...(isAdmin?[["Factura",<select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select>]]:[])]
+                {[["Fecha",<input type="date" className="inp" value={form.fecha||""} onChange={e=>setForm({...form,fecha:e.target.value})}/>],["Hospital",<select className="inp" value={form.hospital||""} onChange={e=>setForm({...form,hospital:e.target.value})}>{hospNames.map(h=><option key={h}>{h}</option>)}</select>],["Quirófano",<select className="inp" value={form.quirofano||""} onChange={e=>setForm({...form,quirofano:e.target.value})}>{"Q-1,Q-2,Q-3,Q-4".split(",").map(q=><option key={q}>{q}</option>)}</select>],["Tipo de cirugía",<input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/>],["Hora inicio",<input type="time" className="inp" value={form.inicio||""} onChange={e=>setForm({...form,inicio:e.target.value})}/>],["Hora fin",<input type="time" className="inp" value={form.fin||""} onChange={e=>setForm({...form,fin:e.target.value})}/>],["Cirujano",<select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>{pOpts(form.fecha)}</select>],["Ayudante",<select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}>{pOpts(form.fecha,true,"— Sin ayudante —")}</select>],["Enfermera",<select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}>{pOpts(form.fecha,true,"— Sin asignar —","Enf")}</select>],["Código paciente",<input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="PAC-2025-XXX"/>],["Estado",<select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select>],...(isAdmin?[["Factura",<select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select>]]:[])]
                 .map(([l,f])=><FG key={l} label={l}>{f}</FG>)}
               </div>
               <FG label="Material especial" style={{marginTop:12}}><input className="inp" value={form.material||""} onChange={e=>setForm({...form,material:e.target.value})} placeholder="Ej: Laparoscopio 5mm, sutura reabsorbible..."/></FG>
@@ -1746,8 +1812,8 @@ export default function App(){
                 <button onClick={()=>setModal(null)} style={{border:"none",background:B.bg,borderRadius:7,width:28,height:28,fontSize:16,color:B.muted,cursor:"pointer"}}>×</button>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:13}}>
-                <FG label="Cirujano principal"><select className="inp" value={form.cirujano_principal||""} onChange={e=>setForm({...form,cirujano_principal:e.target.value})}><option value="">— Sin asignar —</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select></FG>
-                <FG label="Cirujano ayudante"><select className="inp" value={form.cirujano_ayudante||""} onChange={e=>setForm({...form,cirujano_ayudante:e.target.value})}><option value="">— Sin asignar —</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select></FG>
+                <FG label="Cirujano principal"><select className="inp" value={form.cirujano_principal||""} onChange={e=>setForm({...form,cirujano_principal:e.target.value})}>{pOpts(form.fecha,true)}</select></FG>
+                <FG label="Cirujano ayudante"><select className="inp" value={form.cirujano_ayudante||""} onChange={e=>setForm({...form,cirujano_ayudante:e.target.value})}>{pOpts(form.fecha,true)}</select></FG>
                 <FG label="Notas"><input className="inp" value={form.notas||""} onChange={e=>setForm({...form,notas:e.target.value})} placeholder="Observaciones..."/></FG>
               </div>
               {form.fecha&&[form.cirujano_principal,form.cirujano_ayudante].filter(Boolean).filter(n=>estaAusente(n,form.fecha)).map(n=>(

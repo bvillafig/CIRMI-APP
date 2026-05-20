@@ -1187,6 +1187,7 @@ export default function App(){
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
                 <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>🛡️ Guardias</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>Asignación mensual por clínica</p></div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                  <button onClick={()=>setGuardHosp("Todos")} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:guardHosp==="Todos"?B.slateDark:"white",color:guardHosp==="Todos"?"white":B.slate,borderColor:guardHosp==="Todos"?B.slateDark:B.border}}>Todos</button>
                   {hospNames.map((h,i)=><button key={h} onClick={()=>setGuardHosp(h)} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:guardHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:guardHosp===h?"white":B.slate,borderColor:guardHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   {canSugerirGuardia&&<button className="btn-gold" onClick={openSugerencia} style={{padding:"7px 13px",fontSize:13}}>+ Sugerir día</button>}
                   <button className="btn-sec" onClick={exportICSGuardias} style={{padding:"7px 13px",fontSize:13,whiteSpace:"nowrap"}}>📅 .ics</button>
@@ -1242,6 +1243,17 @@ export default function App(){
                 onToday={()=>{setGY(today.getFullYear());setGM(today.getMonth());}}
                 holidays={festivosCat(gY)}
                 renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
+                  if(guardHosp==="Todos"){
+                    const hgs=hospNames.map((h,i)=>({h,color:ACCENTS[i%ACCENTS.length],g:guardias.find(x=>x.fecha===dateStr&&x.hospital===h)}));
+                    const allCov=hgs.every(x=>x.g),someCov=hgs.some(x=>x.g);
+                    const bg=isToday?B.goldLight:allCov?"#E6F4EC":someCov?"#FEF9C3":(isWeekend||isHoliday)?"#EAECEF":"white";
+                    return(<div key={dateStr} className="guard-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:bg}}>
+                      <div style={{width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:isToday?B.gold:"transparent",color:isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text,fontWeight:isToday?700:400,fontSize:11,marginBottom:3}}>{day}</div>
+                      <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+                        {hgs.map(({h,color,g})=><div key={h} title={`${h}: ${g?"asignada":"sin cubrir"}`} style={{width:7,height:7,borderRadius:"50%",background:g?color:B.border,flexShrink:0}}/>)}
+                      </div>
+                    </div>);
+                  }
                   const g=guardias.find(x=>x.fecha===dateStr&&x.hospital===guardHosp);
                   return(<div key={dateStr} className="guard-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isToday?B.goldLight:g?"#E6F4EC":(isWeekend||isHoliday)?"#EAECEF":"white"}} onClick={()=>isAdmin&&openGuardia(dateStr,guardHosp||hospNames[0])}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
@@ -1283,6 +1295,7 @@ export default function App(){
                     <button className="btn-sec" onClick={exportICSQuirofanos} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📅 .ics</button>
                   </div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <button onClick={()=>{setSelHosp("Todos");setQuirEditSlot(null);}} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:selHosp==="Todos"?B.slateDark:"white",color:selHosp==="Todos"?"white":B.slate,borderColor:selHosp==="Todos"?B.slateDark:B.border}}>Todos</button>
                     {hospNames.map((h,i)=><button key={h} onClick={()=>{setSelHosp(h);setQuirEditSlot(null);}} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:selHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:selHosp===h?"white":B.slate,borderColor:selHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   </div>
                 </div>
@@ -1295,6 +1308,27 @@ export default function App(){
                   holidays={festivosCat(calY)}
                   renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                     const isSel=dateStr===selDia;
+                    if(selHosp==="Todos"){
+                      const hInfos=hospNames.map((h,i)=>{
+                        const hasAny=salas.some(s=>["mañana","tarde"].some(t=>{const r=quirEstados.find(e=>e.hospital===h&&e.quirofano===s&&e.fecha===dateStr&&e.turno===t);return r?.cerrado||r?.cirujano||(r&&!r.cerrado);}));
+                        const hasCer=salas.some(s=>["mañana","tarde"].some(t=>quirEstados.find(e=>e.hospital===h&&e.quirofano===s&&e.fecha===dateStr&&e.turno===t)?.cerrado));
+                        const hasCx=cirugias.some(c=>c.hospital===h&&c.fecha===dateStr);
+                        return{h,color:ACCENTS[i%ACCENTS.length],hasAny,hasCer,hasCx};
+                      });
+                      let bg="white";
+                      if(isWeekend||isHoliday)bg="#EAECEF";
+                      if(isToday&&!isSel)bg=B.goldLight;
+                      if(isSel)bg=B.slateDark;
+                      return(<div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:bg}} onClick={()=>setSelDia(dateStr)}>
+                        <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:isSel?"white":isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12,marginBottom:3}}>{day}</div>
+                        <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+                          {hInfos.map(({h,color,hasAny,hasCer,hasCx})=>{
+                            const dc=hasCer?"#FCA5A5":hasCx?"#FCD34D":hasAny?"#86EFAC":B.border;
+                            return <div key={h} title={h} style={{width:mob?7:9,height:mob?7:9,borderRadius:"50%",background:isSel?"rgba(255,255,255,.7)":dc,flexShrink:0}}/>;
+                          })}
+                        </div>
+                      </div>);
+                    }
                     const salaInfos=salas.map(s=>{
                       const recM=getQuirRec(s,dateStr,"mañana");
                       const recT=getQuirRec(s,dateStr,"tarde");
@@ -1343,7 +1377,7 @@ export default function App(){
                 {/* Cabecera día */}
                 <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
                   <h3 style={{fontSize:15,fontWeight:700,color:B.slateDark}}>{selDia===todayStr?"Hoy":selDia}</h3>
-                  <span style={{fontSize:12,color:B.muted}}>{selHosp}</span>
+                  <span style={{fontSize:12,color:B.muted}}>{selHosp==="Todos"?"Todos los hospitales":selHosp}</span>
                 </div>
 
                 {/* Leyenda */}
@@ -1355,7 +1389,44 @@ export default function App(){
                   <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:9,height:9,borderRadius:"50%",background:"#4A6079",boxShadow:"0 0 0 1.5px rgba(0,0,0,.2)"}}/><span style={{fontSize:11,color:B.muted}}>● cirujano asignado</span></div>
                 </div>
 
-                {/* Tabla salas × turno */}
+                {/* Tabla salas × turno — o resumen Todos */}
+                {selHosp==="Todos"?(
+                  <div>
+                    {hospNames.map((h,i)=>{
+                      const qInfos=salas.map(s=>{
+                        const recM=quirEstados.find(e=>e.hospital===h&&e.quirofano===s&&e.fecha===selDia&&e.turno==="mañana");
+                        const recT=quirEstados.find(e=>e.hospital===h&&e.quirofano===s&&e.fecha===selDia&&e.turno==="tarde");
+                        const estM=recM?(recM.cerrado?"cerrado":recM.cirujano?"asignado":"abierto"):"blank";
+                        const estT=recT?(recT.cerrado?"cerrado":recT.cirujano?"asignado":"abierto"):"blank";
+                        const cxs=cirugias.filter(c=>c.hospital===h&&c.quirofano===s&&c.fecha===selDia);
+                        return{s,estM,estT,cxs};
+                      });
+                      const nAbiertos=qInfos.filter(q=>q.estM!=="blank"||q.estT!=="blank").length;
+                      const nCx=qInfos.reduce((acc,q)=>acc+q.cxs.length,0);
+                      return(
+                        <div key={h} style={{background:"white",borderRadius:13,border:`1.5px solid ${ACCENTS[i%ACCENTS.length]}44`,padding:"12px 14px",marginBottom:10}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                            <div style={{fontWeight:700,fontSize:14,color:ACCENTS[i%ACCENTS.length]}}>{h}</div>
+                            <button className="btn-sec" style={{padding:"3px 9px",fontSize:11}} onClick={()=>{setSelHosp(h);setQuirEditSlot(null);}}>Ver detalles →</button>
+                          </div>
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                            {qInfos.map(({s,estM,estT,cxs})=>{
+                              const hasCer=estM==="cerrado"||estT==="cerrado";
+                              const hasCx=cxs.length>0;
+                              const hasOpen=estM==="abierto"||estM==="asignado"||estT==="abierto"||estT==="asignado";
+                              const bg=hasCer?"#FCA5A5":hasCx?"#FCD34D":hasOpen?"#86EFAC":"#F1F5F9";
+                              const txtColor=hasCer?"#7F1D1D":hasCx?"#78350F":hasOpen?"#14532D":B.muted;
+                              return(<div key={s} title={`${s}: M:${estM} T:${estT}`} style={{padding:"4px 9px",borderRadius:7,background:bg,fontSize:11,fontWeight:600,color:txtColor,display:"flex",alignItems:"center",gap:4}}>
+                                {s}{hasCx&&<span style={{fontSize:9}}>🔪{cxs.length}</span>}
+                              </div>);
+                            })}
+                          </div>
+                          {nAbiertos===0&&<div style={{fontSize:11,color:B.muted,marginTop:6,fontStyle:"italic"}}>Sin quirófanos configurados este día</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ):(
                 <div style={{background:"white",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
                   <div style={{display:"grid",gridTemplateColumns:`${mob?64:90}px 1fr 1fr`,background:B.slateDark}}>
                     <div style={{padding:"10px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:.5}}>{salaLabel}</div>
@@ -1419,6 +1490,7 @@ export default function App(){
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             );
           })()}
@@ -1439,6 +1511,7 @@ export default function App(){
                     <button className="btn-sec" onClick={exportICSConsultas} style={{padding:"6px 12px",fontSize:12,whiteSpace:"nowrap"}}>📅 .ics</button>
                   </div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <button onClick={()=>{setConsHosp("Todos");setConsEditSlot(null);}} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:consHosp==="Todos"?B.slateDark:"white",color:consHosp==="Todos"?"white":B.slate,borderColor:consHosp==="Todos"?B.slateDark:B.border}}>Todos</button>
                     {hospNames.map((h,i)=><button key={h} onClick={()=>{setConsHosp(h);setConsEditSlot(null);}} style={{padding:"7px 13px",borderRadius:9,border:"1.5px solid",fontSize:13,fontWeight:600,cursor:"pointer",background:consHosp===h?ACCENTS[i%ACCENTS.length]:"white",color:consHosp===h?"white":B.slate,borderColor:consHosp===h?ACCENTS[i%ACCENTS.length]:B.border}}>{h}</button>)}
                   </div>
                 </div>
@@ -1450,6 +1523,18 @@ export default function App(){
                   holidays={festivosCat(consY)}
                   renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                     const isSel=dateStr===consDate;
+                    if(consHosp==="Todos"){
+                      const hInfos=hospNames.map((h,i)=>{
+                        const hasAny=SALAS_CONSULTA.some(s=>["mañana","tarde"].some(t=>consEstados.find(e=>e.hospital===h&&e.sala===s&&e.fecha===dateStr&&e.turno===t)));
+                        return{h,color:ACCENTS[i%ACCENTS.length],hasAny};
+                      });
+                      return(<div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:(isWeekend||isHoliday)?"#EAECEF":"white"}} onClick={()=>{setConsDate(dateStr);setConsEditSlot(null);}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:isSel?"white":isToday?B.slateDark:(isWeekend||isHoliday)?B.muted:B.text,fontWeight:isToday||isSel?700:400,fontSize:12,marginBottom:3}}>{day}</div>
+                        <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+                          {hInfos.map(({h,color,hasAny})=><div key={h} title={h} style={{width:mob?6:8,height:mob?6:8,borderRadius:"50%",background:isSel?"rgba(255,255,255,.6)":hasAny?color:B.border,flexShrink:0}}/>)}
+                        </div>
+                      </div>);
+                    }
                     const dots=SALAS_CONSULTA.flatMap(s=>["mañana","tarde"].map(t=>{const r=getConsRec(s,dateStr,t);return getEst(r);})).filter(e=>e!=="blank");
                     return(
                       <div key={dateStr} className="cal-day" style={{borderRight:col<6?`1px solid ${B.border}`:"none",background:isSel?B.slateDark:isToday?B.goldLight:(isWeekend||isHoliday)?"#EAECEF":"white"}} onClick={()=>{setConsDate(dateStr);setConsEditSlot(null);}}>
@@ -1469,7 +1554,7 @@ export default function App(){
 
                 <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
                   <h3 style={{fontSize:15,fontWeight:700,color:B.slateDark}}>{consDate===todayStr?"Hoy":consDate}</h3>
-                  <span style={{fontSize:12,color:B.muted}}>{consHosp}</span>
+                  <span style={{fontSize:12,color:B.muted}}>{consHosp==="Todos"?"Todos los hospitales":consHosp}</span>
                 </div>
 
                 <div style={{display:"flex",gap:12,marginBottom:12,flexWrap:"wrap"}}>
@@ -1481,6 +1566,40 @@ export default function App(){
                   ))}
                 </div>
 
+                {consHosp==="Todos"?(
+                  <div>
+                    {hospNames.map((h,i)=>{
+                      const sInfos=SALAS_CONSULTA.map(s=>{
+                        const recM=consEstados.find(e=>e.hospital===h&&e.sala===s&&e.fecha===consDate&&e.turno==="mañana");
+                        const recT=consEstados.find(e=>e.hospital===h&&e.sala===s&&e.fecha===consDate&&e.turno==="tarde");
+                        const estM=recM?(recM.cerrado?"cerrada":recM.cirujano?"asignada":"abierta"):"blank";
+                        const estT=recT?(recT.cerrado?"cerrada":recT.cirujano?"asignada":"abierta"):"blank";
+                        return{s,estM,estT};
+                      });
+                      return(
+                        <div key={h} style={{background:"white",borderRadius:13,border:`1.5px solid ${ACCENTS[i%ACCENTS.length]}44`,padding:"12px 14px",marginBottom:10}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                            <div style={{fontWeight:700,fontSize:14,color:ACCENTS[i%ACCENTS.length]}}>{h}</div>
+                            <button className="btn-sec" style={{padding:"3px 9px",fontSize:11}} onClick={()=>{setConsHosp(h);setConsEditSlot(null);}}>Ver detalles →</button>
+                          </div>
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                            {sInfos.map(({s,estM,estT})=>{
+                              const hasCer=estM==="cerrada"||estT==="cerrada";
+                              const hasAsig=estM==="asignada"||estT==="asignada";
+                              const hasOpen=estM==="abierta"||estT==="abierta";
+                              const bg=hasCer?"#FEF2F2":hasAsig?"#FFFBEB":hasOpen?"#F0FDF4":"#F1F5F9";
+                              const dot=hasCer?"#B91C1C":hasAsig?"#D4A820":hasOpen?"#2E7D52":B.border;
+                              const txt=hasCer?"#B91C1C":hasAsig?"#92400E":hasOpen?"#166534":B.muted;
+                              return(<div key={s} title={`${s}: M:${estM} T:${estT}`} style={{padding:"4px 9px",borderRadius:7,background:bg,fontSize:11,fontWeight:600,color:txt,display:"flex",alignItems:"center",gap:4}}>
+                                <div style={{width:7,height:7,borderRadius:"50%",background:dot,flexShrink:0}}/>{s}
+                              </div>);
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ):(
                 <div style={{background:"white",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
                   <div style={{display:"grid",gridTemplateColumns:`${mob?70:100}px 1fr 1fr`,background:B.slateDark}}>
                     <div style={{padding:"10px 12px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:.5}}>Sala</div>
@@ -1528,6 +1647,7 @@ export default function App(){
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             );
           })()}

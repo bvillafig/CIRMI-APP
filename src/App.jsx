@@ -437,7 +437,8 @@ export default function App(){
       if(estadoNuevo==="blank"){
         if(ex)await dbDelete("quirofanos_estado",ex.id,session);
       }else if(estadoNuevo==="cerrado"){
-        if(ex)await dbUpdate("quirofanos_estado",ex.id,{cerrado:true,cirujano:""},session);
+        // Cerrado = completo/máximo pacientes. NO se borra el cirujano asignado.
+        if(ex)await dbUpdate("quirofanos_estado",ex.id,{cerrado:true},session);
         else await dbInsert("quirofanos_estado",{hospital,quirofano,fecha,turno,cerrado:true,cirujano:""},session);
       }else{
         if(ex)await dbUpdate("quirofanos_estado",ex.id,{cerrado:false,cirujano:cirujano||""},session);
@@ -1139,14 +1140,17 @@ export default function App(){
                       const isOpen=estM==="abierto"||estM==="asignado"||estT==="abierto"||estT==="asignado";
                       const isClosed=estM==="cerrado"||estT==="cerrado";
                       const cxs=cirugias.filter(c=>c.hospital===selHosp&&c.quirofano===s&&c.fecha===dateStr);
-                      const asigRec=estM==="asignado"?recM:estT==="asignado"?recT:null;
+                      // Cirujano persiste aunque esté cerrado (cerrado = completo, no vacío)
+                      const asigRec=estM==="asignado"?recM:estT==="asignado"?recT:
+                                    (estM==="cerrado"&&recM?.cirujano)?recM:
+                                    (estT==="cerrado"&&recT?.cirujano)?recT:null;
                       const cirColor=asigRec?personal.find(p=>p.nombre===asigRec.cirujano)?.color:null;
                       return{s,isOpen,isClosed,ocupado:cxs.length>0,cirColor};
                     });
                     const hasCerrado=salaInfos.some(x=>x.isClosed);
                     const hasCirugias=salaInfos.some(x=>x.isOpen&&x.ocupado);
                     const hasOpen=salaInfos.some(x=>x.isOpen);
-                    const asigDots=salaInfos.filter(x=>x.cirColor);
+                    const asigDots=salaInfos.filter(x=>x.cirColor); // incluye cerrados con cirujano
                     let dayBg="white";
                     if(hasCerrado)dayBg="#FCA5A5";
                     if(hasCirugias&&!hasCerrado)dayBg="#FCD34D";
@@ -1199,10 +1203,12 @@ export default function App(){
                         const est=getQuirEst(rec);
                         const cxs=cirugias.filter(c=>c.hospital===selHosp&&c.quirofano===sala&&c.fecha===selDia&&turnoFromHora(c.inicio)===turno);
                         const cxCirujanos=[...new Set(cxs.map(c=>c.cirujano).filter(Boolean))];
-                        const asigColor=est==="asignado"?personal.find(p=>p.nombre===rec?.cirujano)?.color:null;
-                        const bg=est==="cerrado"?"#FEF2F2":asigColor?`${asigColor}22`:est==="abierto"?"#F0FDF4":cxs.length>0?"#FFFBEB":"#FAFBFC";
+                        // Cirujano persiste al cerrar: buscar en cualquier estado
+                        const recCirujano=rec?.cirujano||"";
+                        const asigColor=(est==="asignado"||(est==="cerrado"&&recCirujano))?personal.find(p=>p.nombre===recCirujano)?.color:null;
+                        const bg=est==="cerrado"?(asigColor?`${asigColor}33`:"#FEF2F2"):asigColor?`${asigColor}22`:est==="abierto"?"#F0FDF4":cxs.length>0?"#FFFBEB":"#FAFBFC";
                         const dotColor=est==="cerrado"?"#B91C1C":asigColor||"#2E7D52";
-                        const label=est==="cerrado"?"Cerrado":est==="asignado"?(rec?.cirujano||"Asignado"):cxs.length>0?"Con cirugías":"Disponible";
+                        const label=est==="cerrado"?`🔒 Completo${recCirujano?" · "+recCirujano:""}`:est==="asignado"?(recCirujano||"Asignado"):cxs.length>0?"Con cirugías":"Disponible";
                         const labelColor=est==="cerrado"?"#B91C1C":asigColor||"#166534";
                         const isEd=quirEditSlot?.sala===sala&&quirEditSlot?.turno===turno;
                         return(

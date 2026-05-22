@@ -355,7 +355,7 @@ export default function App(){
   };
   // Opciones de personal para selects — ausentes deshabilitadas según fecha
   const pOpts=(fecha,inclVacio=false,emptyLabel="— Sin asignar —",filtroRol=null)=>{
-    const lista=filtroRol?personal.filter(p=>p.rol?.includes(filtroRol)):personal;
+    const lista=filtroRol?personal.filter(p=>p.rol?.toLowerCase().includes(filtroRol.toLowerCase())):personal;
     return(<>{inclVacio&&<option value="">{emptyLabel}</option>}{lista.map(p=>{const aus=fecha&&estaAusente(p.nombre,fecha);return<option key={p.id} value={p.nombre} disabled={aus}>{p.nombre}{aus?" (no disponible)":""}</option>;})}</>);
   };
   const toggleNotifProactivas=()=>{const v=!notifProactivas;setNotifProactivas(v);localStorage.setItem("cirmi_notif_proact",String(v));};
@@ -1141,7 +1141,7 @@ export default function App(){
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
                 <div><h2 style={{fontSize:20,fontWeight:700,color:B.slateDark}}>👨‍⚕️ Programación</h2><p style={{color:B.muted,fontSize:13,marginTop:2}}>Cirugías por cirujano y clínica</p></div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  <select className="inp" style={{width:mob?"100%":170}} value={filtCir} onChange={e=>setFiltCir(e.target.value)}><option value="Todos">Todos los cirujanos</option>{personal.map(p=><option key={p.id}>{p.nombre}</option>)}</select>
+                  <select className="inp" style={{width:mob?"100%":170}} value={filtCir} onChange={e=>setFiltCir(e.target.value)}><option value="Todos">Todos los cirujanos</option>{personal.filter(p=>p.rol?.toLowerCase().includes(ROL_CIRUJANO)).map(p=><option key={p.id}>{p.nombre}</option>)}</select>
                   <select className="inp" style={{width:mob?"100%":155}} value={filtCli} onChange={e=>setFiltCli(e.target.value)}><option value="Todos">Todas las clínicas</option>{hospNames.map(h=><option key={h}>{h}</option>)}</select>
                 </div>
               </div>
@@ -1478,7 +1478,7 @@ export default function App(){
                                 {(est==="abierto"||est==="asignado")&&(
                                   <select className="inp" style={{padding:"5px 8px",fontSize:12}} value={rec?.cirujano||""} onChange={e=>saveQuirofanoEstado(selHosp,sala,selDia,turno,"abierto",e.target.value)}>
                                     <option value="">— Sin asignar —</option>
-                                    {personal.map(p=><option key={p.id}>{p.nombre}</option>)}
+                                    {personal.filter(p=>p.rol?.toLowerCase().includes(ROL_CIRUJANO)).map(p=><option key={p.id}>{p.nombre}</option>)}
                                   </select>
                                 )}
                                 {canCreate&&(est==="abierto"||est==="asignado")&&<button onClick={()=>openNewCx(selDia,{hospital:selHosp,quirofano:sala})} style={{padding:"4px 9px",borderRadius:6,border:`1px solid ${B.gold}`,background:B.goldLight,fontSize:11,fontWeight:600,cursor:"pointer",color:B.slateDark}}>+ Nueva cirugía</button>}
@@ -1636,7 +1636,7 @@ export default function App(){
                                 {(est==="abierta"||est==="asignada")&&(
                                   <select className="inp" style={{padding:"5px 8px",fontSize:12}} value={rec?.cirujano||""} onChange={e=>saveConsultaEstado(consHosp,sala,consDate,turno,"abierta",e.target.value)}>
                                     <option value="">— Sin asignar —</option>
-                                    {personal.map(p=><option key={p.id}>{p.nombre}</option>)}
+                                    {personal.filter(p=>p.rol?.toLowerCase().includes(ROL_CIRUJANO)).map(p=><option key={p.id}>{p.nombre}</option>)}
                                   </select>
                                 )}
                               </div>
@@ -2035,7 +2035,7 @@ export default function App(){
                 <button onClick={()=>setModal(null)} style={{border:"none",background:B.bg,borderRadius:7,width:28,height:28,fontSize:16,color:B.muted,cursor:"pointer"}}>×</button>
               </div>
               <div className="form-grid">
-                {[["Fecha",<input type="date" className="inp" value={form.fecha||""} onChange={e=>setForm({...form,fecha:e.target.value})}/>],["Hospital",<select className="inp" value={form.hospital||""} onChange={e=>setForm({...form,hospital:e.target.value})}>{hospNames.map(h=><option key={h}>{h}</option>)}</select>],["Quirófano",<select className="inp" value={form.quirofano||""} onChange={e=>setForm({...form,quirofano:e.target.value})}>{"Q-1,Q-2,Q-3,Q-4".split(",").map(q=><option key={q}>{q}</option>)}</select>],["Tipo de cirugía",<input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/>],["Hora inicio",<input type="time" className="inp" value={form.inicio||""} onChange={e=>setForm({...form,inicio:e.target.value})}/>],["Hora fin",<input type="time" className="inp" value={form.fin||""} onChange={e=>setForm({...form,fin:e.target.value})}/>],["Cirujano",<select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>{pOpts(form.fecha)}</select>],["Ayudante",<select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}>{pOpts(form.fecha,true,"— Sin ayudante —")}</select>],["Enfermera",<select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}>{pOpts(form.fecha,true,"— Sin asignar —","Enf")}</select>],["Código paciente",<input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="PAC-2025-XXX"/>],["Estado",<select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select>],...(isAdmin?[["Factura",<select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select>]]:[])]
+                {[["Fecha",<input type="date" className="inp" value={form.fecha||""} onChange={e=>setForm({...form,fecha:e.target.value})}/>],["Hospital",<select className="inp" value={form.hospital||""} onChange={e=>setForm({...form,hospital:e.target.value})}>{hospNames.map(h=><option key={h}>{h}</option>)}</select>],["Quirófano",<select className="inp" value={form.quirofano||""} onChange={e=>setForm({...form,quirofano:e.target.value})}>{"Q-1,Q-2,Q-3,Q-4".split(",").map(q=><option key={q}>{q}</option>)}</select>],["Tipo de cirugía",<input className="inp" value={form.tipo||""} onChange={e=>setForm({...form,tipo:e.target.value})} placeholder="Ej: Laparoscopia"/>],["Hora inicio",<input type="time" className="inp" value={form.inicio||""} onChange={e=>setForm({...form,inicio:e.target.value})}/>],["Hora fin",<input type="time" className="inp" value={form.fin||""} onChange={e=>setForm({...form,fin:e.target.value})}/>],["Cirujano",<select className="inp" value={form.cirujano||""} onChange={e=>setForm({...form,cirujano:e.target.value})}>{pOpts(form.fecha,false,"— Sin asignar —",ROL_CIRUJANO)}</select>],["Ayudante",<select className="inp" value={form.ayudante||""} onChange={e=>setForm({...form,ayudante:e.target.value})}>{pOpts(form.fecha,true,"— Sin ayudante —",ROL_CIRUJANO)}</select>],["Enfermera",<select className="inp" value={form.enfermera||""} onChange={e=>setForm({...form,enfermera:e.target.value})}>{pOpts(form.fecha,true,"— Sin asignar —","Enf")}</select>],["Código paciente",<input className="inp" value={form.paciente||""} onChange={e=>setForm({...form,paciente:e.target.value})} placeholder="PAC-2025-XXX"/>],["Estado",<select className="inp" value={form.estado||""} onChange={e=>setForm({...form,estado:e.target.value})}>{ESTADOS_CX.map(s=><option key={s}>{s}</option>)}</select>],...(isAdmin?[["Factura",<select className="inp" value={form.factura||""} onChange={e=>setForm({...form,factura:e.target.value})}>{ESTADOS_FA.map(s=><option key={s}>{s}</option>)}</select>]]:[])]
                 .map(([l,f])=><FG key={l} label={l}>{f}</FG>)}
               </div>
               <FG label="Material especial" style={{marginTop:12}}><input className="inp" value={form.material||""} onChange={e=>setForm({...form,material:e.target.value})} placeholder="Ej: Laparoscopio 5mm, sutura reabsorbible..."/></FG>
@@ -2059,8 +2059,8 @@ export default function App(){
                 <button onClick={()=>setModal(null)} style={{border:"none",background:B.bg,borderRadius:7,width:28,height:28,fontSize:16,color:B.muted,cursor:"pointer"}}>×</button>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:13}}>
-                <FG label="Cirujano principal"><select className="inp" value={form.cirujano_principal||""} onChange={e=>setForm({...form,cirujano_principal:e.target.value})}>{pOpts(form.fecha,true)}</select></FG>
-                <FG label="Cirujano ayudante"><select className="inp" value={form.cirujano_ayudante||""} onChange={e=>setForm({...form,cirujano_ayudante:e.target.value})}>{pOpts(form.fecha,true)}</select></FG>
+                <FG label="Cirujano principal"><select className="inp" value={form.cirujano_principal||""} onChange={e=>setForm({...form,cirujano_principal:e.target.value})}>{pOpts(form.fecha,true,"— Sin asignar —",ROL_CIRUJANO)}</select></FG>
+                <FG label="Cirujano ayudante"><select className="inp" value={form.cirujano_ayudante||""} onChange={e=>setForm({...form,cirujano_ayudante:e.target.value})}>{pOpts(form.fecha,true,"— Sin asignar —",ROL_CIRUJANO)}</select></FG>
                 <FG label="Notas"><input className="inp" value={form.notas||""} onChange={e=>setForm({...form,notas:e.target.value})} placeholder="Observaciones..."/></FG>
               </div>
               {form.fecha&&[form.cirujano_principal,form.cirujano_ayudante].filter(Boolean).filter(n=>estaAusente(n,form.fecha)).map(n=>(

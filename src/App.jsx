@@ -231,6 +231,10 @@ export default function App(){
   const[showNotifs,setShowNotifs]=useState(false);
   const[modal,setModal]=useState(null);
   const[form,setForm]=useState({});
+  // B5: todayStr/today reactivos — se actualizan al cambiar de día sin recargar
+  const[_liveDate,_setLiveDate]=useState(()=>fmt(new Date()));
+  const todayStr=_liveDate;
+  const today=new Date(_liveDate+'T12:00:00');
   const[selDate,setSelDate]=useState(todayStr);
   const[calY,setCalY]=useState(today.getFullYear());
   const[calM,setCalM]=useState(today.getMonth());
@@ -299,6 +303,7 @@ export default function App(){
 
   useEffect(()=>{if(session&&perfil?.estado==="aprobado")loadAll();},[session,perfil?.estado]);
   useEffect(()=>{window.scrollTo({top:0,behavior:"smooth"});},[tab]);
+  useEffect(()=>{const t=setInterval(()=>{const s=fmt(new Date());if(s!==_liveDate)_setLiveDate(s);},30000);return()=>clearInterval(t);},[_liveDate]);
 
   const loadAll=async()=>{
     setLoading(true);

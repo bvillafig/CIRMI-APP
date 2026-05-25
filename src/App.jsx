@@ -400,7 +400,7 @@ export default function App(){
   };
   const exportICSGuardias=()=>{
     const hosp=guardHosp||hospNames[0];
-    const evs=guardias.filter(g=>g.fecha>=todayStr&&(!hosp||g.hospital===hosp)).map(g=>({
+    const evs=guardias.filter(g=>g.fecha>=todayStr&&(hosp==="Todos"||g.hospital===hosp)).map(g=>({
       uid:`cirmi-g-${g.id}@cirmi`,start:icsDate(g.fecha,null).replace(/-/g,""),end:nextDay(g.fecha),allDay:true,
       summary:`🛡️ Guardia — ${g.hospital}`,
       desc:`Principal: ${g.cirujano_principal||"—"}\nAyudante: ${g.cirujano_ayudante||"—"}${g.notas?"\nNotas: "+g.notas:""}`,
@@ -411,7 +411,7 @@ export default function App(){
   };
   const exportICSConsultas=()=>{
     const hosp=consHosp||hospNames[0];
-    const evs=consEstados.filter(e=>e.fecha>=todayStr&&!e.cerrado&&e.hospital===hosp).map(e=>({
+    const evs=consEstados.filter(e=>e.fecha>=todayStr&&!e.cerrado&&(hosp==="Todos"||e.hospital===hosp)).map(e=>({
       uid:`cirmi-cons-${e.id}@cirmi`,
       start:icsDate(e.fecha,e.turno==="mañana"?"09:00":"15:00"),end:icsDate(e.fecha,e.turno==="mañana"?"14:00":"20:00"),allDay:false,
       summary:`🩺 Consulta ${e.sala} ${e.turno}${e.cirujano?" — "+e.cirujano:""}`,
@@ -423,7 +423,7 @@ export default function App(){
   };
   const exportICSQuirofanos=()=>{
     const hosp=quirHosp||hospNames[0];
-    const evs=quirEstados.filter(e=>e.fecha>=todayStr&&!e.cerrado&&e.hospital===hosp).map(e=>({
+    const evs=quirEstados.filter(e=>e.fecha>=todayStr&&!e.cerrado&&(hosp==="Todos"||e.hospital===hosp)).map(e=>({
       uid:`cirmi-quir-${e.id}@cirmi`,
       start:icsDate(e.fecha,e.turno==="mañana"?"08:00":"15:00"),end:icsDate(e.fecha,e.turno==="mañana"?"15:00":"21:00"),allDay:false,
       summary:`🏥 ${e.quirofano} abierto — ${e.turno}`,
@@ -434,7 +434,7 @@ export default function App(){
     downloadICS(makeICS(evs,"Quirófanos"),`CIRMI-Quirofanos-${hosp||"todos"}.ics`);
   };
   const exportarDia=()=>{const cxs=cxDiaFilt.slice().sort((a,b)=>a.inicio.localeCompare(b.inicio));const rows=cxs.map(c=>`<tr><td>${c.inicio||""}–${c.fin||""}</td><td>${c.tipo||""}</td><td>${c.paciente||""}</td><td>${c.cirujano||""}</td><td>${c.ayudante||""}</td><td>${c.enfermera||""}</td><td>${c.quirofano||""}</td><td>${c.hospital||""}</td><td>${(c.material||"").replace(/</g,"&lt;")}</td><td>${(c.obs||"").replace(/</g,"&lt;")}</td></tr>`).join("");const html=`<!DOCTYPE html><html><head><title>CIRMI – Parte ${selDate}</title><style>body{font-family:Arial,sans-serif;font-size:12px;color:#1C2B3A;margin:20px}h1{font-size:16px;color:#2E3F52;margin-bottom:4px}h2{font-size:12px;font-weight:normal;color:#7A90A4;margin-bottom:18px}table{width:100%;border-collapse:collapse}th{background:#4A6079;color:white;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}td{padding:6px 8px;border-bottom:1px solid #DDE4EB;font-size:11px;vertical-align:top}tr:nth-child(even)td{background:#F2F5F8}footer{margin-top:20px;font-size:10px;color:#7A90A4}@media print{body{margin:0}}</style></head><body><h1>CIRMI — Parte diario</h1><h2>${selDate} · ${cxs.length} intervención${cxs.length!==1?"es":""}${agFiltHosp!=="Todos"?" · "+agFiltHosp:""}</h2>${rows?`<table><thead><tr><th>Hora</th><th>Tipo</th><th>Paciente</th><th>Cirujano</th><th>Ayudante</th><th>Enfermera</th><th>Quirófano</th><th>Hospital</th><th>Material</th><th>Notas</th></tr></thead><tbody>${rows}</tbody></table>`:"<p style='color:#7A90A4;text-align:center;padding:30px'>Sin cirugías este día</p>"}<footer>Generado ${new Date().toLocaleString("es-ES")} · CIRMI Gestión Quirúrgica</footer><script>window.onload=function(){window.print()}<\/script></body></html>`;const w=window.open("","_blank","width=1100,height=720");if(w){w.document.write(html);w.document.close();}};
-  const exportarCSVMes=()=>{const hoy=new Date();const cxs=cirugias.filter(c=>{const d=new Date(c.fecha+'T12:00:00');return d.getMonth()===hoy.getMonth()&&d.getFullYear()===hoy.getFullYear()&&(filtFact==="Todos"||c.factura===filtFact);}).sort((a,b)=>a.fecha.localeCompare(b.fecha));const hdr=["ID","Fecha","Tipo","Paciente","Cirujano","Ayudante","Enfermera","Hospital","Quirófano","Estado","Factura","Material","Observaciones"];const rows=cxs.map(c=>[c.id,c.fecha,c.tipo||"",c.paciente||"",c.cirujano||"",c.ayudante||"",c.enfermera||"",c.hospital||"",c.quirofano||"",c.estado||"",c.factura||"",c.material||"",(c.obs||"").replace(/,/g,";")]);const csv=[hdr,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`CIRMI-${MESES[hoy.getMonth()]}-${hoy.getFullYear()}.csv`;a.click();URL.revokeObjectURL(url);};
+  const exportarCSVMes=()=>{const cxs=cirugias.filter(c=>{const d=new Date(c.fecha+'T12:00:00');return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear()&&(filtFact==="Todos"||c.factura===filtFact);}).sort((a,b)=>a.fecha.localeCompare(b.fecha));const hdr=["ID","Fecha","Tipo","Paciente","Cirujano","Ayudante","Enfermera","Hospital","Quirófano","Estado","Factura","Material","Observaciones"];const rows=cxs.map(c=>[c.id,c.fecha,c.tipo||"",c.paciente||"",c.cirujano||"",c.ayudante||"",c.enfermera||"",c.hospital||"",c.quirofano||"",c.estado||"",c.factura||"",c.material||"",(c.obs||"").replace(/,/g,";")]);const csv=[hdr,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`CIRMI-${MESES[today.getMonth()]}-${today.getFullYear()}.csv`;a.click();URL.revokeObjectURL(url);};
 
   // ── Cirugías ──
   const openNewCx=(fecha,opts={})=>{
@@ -551,7 +551,7 @@ export default function App(){
         if(ex)await dbUpdate("consultas_estado",ex.id,{cerrado:false,cirujano:cirujano||""},session);
         else await dbInsert("consultas_estado",{hospital,sala,fecha,turno,cerrado:false,cirujano:cirujano||""},session);
       }
-      const ce=await dbGet("consultas_estado","order=fecha.asc");setConsEstados(ce);
+      const ce=await dbGet("consultas_estado",`order=fecha.asc&fecha=gte.${fmt(new Date(today.getFullYear()-1,today.getMonth(),today.getDate()))}`,session);setConsEstados(ce);
       if(estadoNuevo!=="abierta"&&estadoNuevo!=="asignada")setConsEditSlot(null);
     }catch{alert("Error.");}finally{setSaving(false);}
   };
@@ -576,7 +576,7 @@ export default function App(){
   const cambiarRolApp=async(id,rolApp)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol_app:rolApp})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const vincularPersonal=async(userId,personalNombre)=>{try{await fetch(`${API("perfiles")}?id=eq.${userId}`,{method:"PATCH",headers:H(session),body:JSON.stringify({nombre:personalNombre})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error al vincular.");}};
   const aprobarYVincular=async(userId,personalNombre)=>{try{await fetch(`${API("perfiles")}?id=eq.${userId}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado",nombre:personalNombre||undefined})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
-;
+
 
   // ── Export PDF semana ──
   const exportarSemana=()=>{
@@ -1153,7 +1153,7 @@ export default function App(){
                 </div>
               </div>
               {filtCir==="Todos"?(
-                personal.map(p=>{
+                personal.filter(p=>p.rol?.toLowerCase().includes(ROL_CIRUJANO)).map(p=>{
                   const cxs=cxProg.filter(c=>c.cirujano===p.nombre||c.ayudante===p.nombre);
                   if(cxs.length===0)return null;
                   const prox=cxs.filter(c=>c.fecha>=todayStr);
@@ -1848,7 +1848,7 @@ export default function App(){
                           <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
                         </div>
                         <div style={{fontWeight:600,fontSize:13}}>{c.tipo}</div>
-                        <div style={{fontSize:12,color:B.muted}}>{c.fecha} · {c.hospital} · {c.cirujano}</div>
+                        <div style={{fontSize:12,color:B.muted}}>{c.fecha} · {c.hospital} · {c.cirujano}{c.paciente&&<> · <span style={{color:B.slate}}>👤 {c.paciente}</span></>}</div>
                       </div>
                       <div onClick={e=>e.stopPropagation()}>
                         <select className="inp" style={{padding:"4px 6px",fontSize:11,width:110}} value={c.factura} onChange={e=>updFact(c.id,e.target.value)}>
@@ -2211,7 +2211,8 @@ export default function App(){
                 const resCx=cirugias.filter(c=>[c.tipo,c.paciente,c.cirujano,c.ayudante,c.enfermera,c.hospital,c.estado].some(v=>v&&v.toLowerCase().includes(q))).slice(0,6);
                 const resPers=personal.filter(p=>[p.nombre,p.rol].some(v=>v&&v.toLowerCase().includes(q))).slice(0,5);
                 const resDocs=documentos.filter(d=>[d.nombre,d.descripcion,d.categoria].some(v=>v&&v.toLowerCase().includes(q))).slice(0,5);
-                const total=resCx.length+resPers.length+resDocs.length;
+                const resGuard=guardias.filter(g=>[g.hospital,g.cirujano_principal,g.cirujano_ayudante,g.notas].some(v=>v&&v.toLowerCase().includes(q))).slice(0,4);
+                const total=resCx.length+resPers.length+resDocs.length+resGuard.length;
                 if(total===0)return<div style={{textAlign:"center",color:B.muted,fontSize:13,padding:"32px 0"}}>Sin resultados para «{queryBusq.trim()}»</div>;
                 const Row=({icon,iconBg,title,sub,badge,onClick})=>(
                   <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:8,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background=B.bg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
@@ -2253,6 +2254,15 @@ export default function App(){
                         title={hi(d.nombre||"")}
                         sub={`${d.categoria||""} · ${d.descripcion?.slice(0,55)||""}`}
                         onClick={()=>{setTab("documentos");setShowBusqueda(false);}}/>
+                    ))}
+                  </div>)}
+                  {resGuard.length>0&&(<div style={{marginBottom:4}}>
+                    <SecH label="Guardias" n={resGuard.length}/>
+                    {resGuard.map(g=>(
+                      <Row key={g.id} icon="🛡️" iconBg="#E8EDF2"
+                        title={<>{hi(g.hospital||"")}</>}
+                        sub={`${g.fecha||""} · ${[g.cirujano_principal,g.cirujano_ayudante].filter(Boolean).join(" · ")||"Sin asignar"}`}
+                        onClick={()=>{setGuardHosp(g.hospital);setGY(new Date(g.fecha+'T12:00:00').getFullYear());setGM(new Date(g.fecha+'T12:00:00').getMonth());setTab("guardias");setShowBusqueda(false);}}/>
                     ))}
                   </div>)}
                 </>);

@@ -26,7 +26,9 @@ const uploadDoc = async (path,file,tok) => {
 };
 const getSignedUrl = async (path,tok) => {
   const r=await fetch(`${STORAGE}/object/sign/documentos/${path}`,{method:"POST",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:3600})});
+  if(!r.ok)throw new Error("No se pudo generar el enlace de descarga.");
   const d=await r.json();
+  if(!d.signedURL)throw new Error("Enlace no disponible.");
   return `${SB_URL}${d.signedURL}`;
 };
 const deleteStorageFile = async (path,tok) => {
@@ -434,7 +436,8 @@ export default function App(){
     const f=fecha||(tab==="quirofanos"?quirDate:tab==="consultas"?consDate:selDate);
     const hosp=opts.hospital||(tab==="quirofanos"?quirHosp:tab==="consultas"?consHosp:tab==="guardias"?guardHosp:null)||hospNames[0]||"";
     const quir=opts.quirofano||"Q-1";
-    setForm({id:newId(),fecha:f,hospital:hosp,quirofano:quir,tipo:"",cirujano:personal[0]?.nombre||"",ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});
+    const defCir=personal.find(p=>p.rol?.toLowerCase().includes(ROL_CIRUJANO))?.nombre||"";
+    setForm({id:newId(),fecha:f,hospital:hosp,quirofano:quir,tipo:"",cirujano:defCir,ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});
     setModal("cx_n");
   };
   const saveCx=async()=>{
@@ -445,10 +448,10 @@ export default function App(){
     }
     const ausentes=[form.cirujano,form.ayudante,form.enfermera].filter(Boolean).filter(n=>estaAusente(n,form.fecha));
     if(ausentes.length>0){alert(`⛔ ${ausentes.join(", ")} no está${ausentes.length>1?"n":""} disponible${ausentes.length>1?"s":""} el ${form.fecha}.`);return;}
-    setSaving(true);try{if(modal==="cx_n"){await dbInsert("cirugias",form);await logAudit("cirugias",form.id,"insert",{tipo:form.tipo,fecha:form.fecha,hospital:form.hospital});}else{const prev=cirugias.find(c=>c.id===form.id);const{id,...d}=form;await dbUpdate("cirugias",id,d);if(prev){const ch={};["tipo","fecha","inicio","fin","hospital","cirujano","ayudante","enfermera","paciente","estado","factura","obs","quirofano"].forEach(k=>{if(String(prev[k]||"")!==String(form[k]||""))ch[k]={de:prev[k]||"",a:form[k]||""};});if(Object.keys(ch).length>0)await logAudit("cirugias",id,"update",ch);}}await loadAll();setModal(null);}catch{alert("Error al guardar.");}finally{setSaving(false);};
-  };;
+    setSaving(true);try{if(modal==="cx_n"){await dbInsert("cirugias",form);await logAudit("cirugias",form.id,"insert",{tipo:form.tipo,fecha:form.fecha,hospital:form.hospital});}else{const prev=cirugias.find(c=>c.id===form.id);const{id,...d}=form;await dbUpdate("cirugias",id,d);if(prev){const ch={};["tipo","fecha","inicio","fin","hospital","cirujano","ayudante","enfermera","paciente","estado","factura","obs","quirofano"].forEach(k=>{if(String(prev[k]||"")!==String(form[k]||""))ch[k]={de:prev[k]||"",a:form[k]||""};});if(Object.keys(ch).length>0)await logAudit("cirugias",id,"update",ch);}}await loadAll();setModal(null);}catch{alert("Error al guardar.");}finally{setSaving(false);}
+  };
   const delCx=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await logAudit("cirugias",id,"delete",{});await dbDelete("cirugias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
-  const duplicarCx=()=>{setForm({...form,id:newId(),fecha:selDate,estado:"Confirmada",factura:"Pendiente"});setModal("cx_n");};
+  const duplicarCx=()=>{setForm({...form,id:newId(),estado:"Confirmada",factura:"Pendiente"});setModal("cx_n");};
   const updFact=async(id,v)=>{try{await dbUpdate("cirugias",id,{factura:v});setCirugias(p=>p.map(c=>c.id===id?{...c,factura:v}:c));}catch{alert("Error.");}};
 
   // ── Guardias ──
@@ -456,8 +459,8 @@ export default function App(){
   const saveGuardia=async()=>{
     const ausentes=[form.cirujano_principal,form.cirujano_ayudante].filter(Boolean).filter(n=>estaAusente(n,form.fecha));
     if(ausentes.length>0){alert(`⛔ ${ausentes.join(", ")} no está${ausentes.length>1?"n":""} disponible${ausentes.length>1?"s":""} el ${form.fecha}.`);return;}
-    setSaving(true);try{if(form.id){const{id,...d}=form;await dbUpdate("guardias",id,d);}else await dbInsert("guardias",form);await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);};
-  };;
+    setSaving(true);try{if(form.id){const{id,...d}=form;await dbUpdate("guardias",id,d);}else await dbInsert("guardias",form);await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);}
+  };
   const delGuardia=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("guardias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
 
   // ── Sugerencias de guardia ──
@@ -509,7 +512,7 @@ export default function App(){
   };
 
   // ── Quirófanos / Consultas ──
-  const turnoFromHora=(inicio)=>inicio&&inicio<"15:00"?"mañana":"tarde";
+  const turnoFromHora=(inicio)=>!inicio?"mañana":inicio<"15:00"?"mañana":"tarde";
   // Cerrado por defecto: sin registro = cerrado; registro con cerrado=false = abierto
   const esCerradoQuir=(hosp,q,fecha,turno)=>{const r=quirEstados.find(e=>e.hospital===hosp&&e.quirofano===q&&e.fecha===fecha&&e.turno===turno);return r?.cerrado===true;};
   const esCerradoCons=(hosp,s,fecha,turno)=>{const r=consEstados.find(e=>e.hospital===hosp&&e.sala===s&&e.fecha===fecha&&e.turno===turno);return!r||r.cerrado;};

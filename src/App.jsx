@@ -304,17 +304,17 @@ export default function App(){
     setLoading(true);
     try{
       const results=await Promise.allSettled([
-        dbGet("cirugias","order=fecha.asc,inicio.asc"),
-        dbGet("personal","order=nombre.asc&activo=eq.true"),
-        dbGet("hospitales","order=nombre.asc&activo=eq.true"),
-        dbGet("guardias","order=fecha.asc"),
-        dbGet("sugerencias_guardia","order=created_at.desc"),
-        dbGet("documentos","order=created_at.desc"),
+        dbGet("cirugias",`order=fecha.asc,inicio.asc&fecha=gte.${fmt(new Date(today.getFullYear()-2,today.getMonth(),today.getDate()))}&fecha=lte.${fmt(new Date(today.getFullYear()+2,today.getMonth(),today.getDate()))}`,session),
+        dbGet("personal","order=nombre.asc&activo=eq.true",session),
+        dbGet("hospitales","order=nombre.asc&activo=eq.true",session),
+        dbGet("guardias","order=fecha.asc",session),
+        dbGet("sugerencias_guardia","order=created_at.desc",session),
+        dbGet("documentos","order=created_at.desc",session),
         dbGet("notificaciones",`usuario_id=eq.${authUser?.id}&order=created_at.desc&limit=20`,session),
-        dbGet("quirofanos_estado","order=fecha.asc"),
-        dbGet("consultas_estado","order=fecha.asc"),
+        dbGet("quirofanos_estado",`order=fecha.asc&fecha=gte.${fmt(new Date(today.getFullYear()-1,today.getMonth(),today.getDate()))}`,session),
+        dbGet("consultas_estado",`order=fecha.asc&fecha=gte.${fmt(new Date(today.getFullYear()-1,today.getMonth(),today.getDate()))}`,session),
         dbGet("auditoria","order=created_at.desc&limit=300",session),
-        dbGet("ausencias","order=fecha_inicio.asc"),
+        dbGet("ausencias","order=fecha_inicio.asc",session),
       ]);
       const ok=(r,fb=[])=>r.status==="fulfilled"?r.value:fb;
       const[rC,rP,rH,rG,rS,rD,rN,rQe,rCe,rAu,rAus]=results;
@@ -343,15 +343,15 @@ export default function App(){
     const s=t2m(inicio),e=t2m(fin);
     return cirugias.find(c=>c.id!==excludeId&&c.fecha===fecha&&c.estado!=="Cancelada"&&[c.cirujano,c.ayudante,c.enfermera].includes(nombre)&&c.inicio&&c.fin&&t2m(c.inicio)<e&&t2m(c.fin)>s)||null;
   };
-  const addAusencia=async()=>{if(!ausForm.fecha_inicio||!ausForm.fecha_fin||ausForm.fecha_fin<ausForm.fecha_inicio){alert("Fechas inválidas.");return;}setSaving(true);try{await dbInsert("ausencias",{personal_id:form.id,personal_nombre:form.nombre,fecha_inicio:ausForm.fecha_inicio,fecha_fin:ausForm.fecha_fin,motivo:ausForm.motivo||""},session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);setShowAusForm(false);setAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}catch{alert("Error.");}finally{setSaving(false);}};
-  const delAusencia=async(id)=>{if(!confirm("¿Eliminar ausencia?"))return;try{await dbDelete("ausencias",id,session);const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);}catch{alert("Error.");}};
+  const addAusencia=async()=>{if(!ausForm.fecha_inicio||!ausForm.fecha_fin||ausForm.fecha_fin<ausForm.fecha_inicio){alert("Fechas inválidas.");return;}setSaving(true);try{await dbInsert("ausencias",{personal_id:form.id,personal_nombre:form.nombre,fecha_inicio:ausForm.fecha_inicio,fecha_fin:ausForm.fecha_fin,motivo:ausForm.motivo||""},session);const au2=await dbGet("ausencias","order=fecha_inicio.asc",session);setAusencias(au2);setShowAusForm(false);setAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});}catch{alert("Error.");}finally{setSaving(false);}};
+  const delAusencia=async(id)=>{if(!confirm("¿Eliminar ausencia?"))return;try{await dbDelete("ausencias",id,session);const au2=await dbGet("ausencias","order=fecha_inicio.asc",session);setAusencias(au2);}catch{alert("Error.");}};
   const addMiAusencia=async()=>{
     if(!miAusForm.fecha_inicio||!miAusForm.fecha_fin||miAusForm.fecha_fin<miAusForm.fecha_inicio){alert("Fechas inválidas.");return;}
     const miP=personal.find(p=>p.nombre===perfil?.nombre);
     setSaving(true);
     try{
       await dbInsert("ausencias",{personal_id:miP?.id||null,personal_nombre:perfil?.nombre||"",fecha_inicio:miAusForm.fecha_inicio,fecha_fin:miAusForm.fecha_fin,motivo:miAusForm.motivo||""},session);
-      const au2=await dbGet("ausencias","order=fecha_inicio.asc");setAusencias(au2);
+      const au2=await dbGet("ausencias","order=fecha_inicio.asc",session);setAusencias(au2);
       setShowMiAusForm(false);setMiAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});
     }catch{alert("Error al guardar.");}finally{setSaving(false);}
   };
@@ -448,20 +448,20 @@ export default function App(){
     }
     const ausentes=[form.cirujano,form.ayudante,form.enfermera].filter(Boolean).filter(n=>estaAusente(n,form.fecha));
     if(ausentes.length>0){alert(`⛔ ${ausentes.join(", ")} no está${ausentes.length>1?"n":""} disponible${ausentes.length>1?"s":""} el ${form.fecha}.`);return;}
-    setSaving(true);try{if(modal==="cx_n"){await dbInsert("cirugias",form);await logAudit("cirugias",form.id,"insert",{tipo:form.tipo,fecha:form.fecha,hospital:form.hospital});}else{const prev=cirugias.find(c=>c.id===form.id);const{id,...d}=form;await dbUpdate("cirugias",id,d);if(prev){const ch={};["tipo","fecha","inicio","fin","hospital","cirujano","ayudante","enfermera","paciente","estado","factura","obs","quirofano"].forEach(k=>{if(String(prev[k]||"")!==String(form[k]||""))ch[k]={de:prev[k]||"",a:form[k]||""};});if(Object.keys(ch).length>0)await logAudit("cirugias",id,"update",ch);}}await loadAll();setModal(null);}catch{alert("Error al guardar.");}finally{setSaving(false);}
+    setSaving(true);try{if(modal==="cx_n"){await dbInsert("cirugias",form,session);await logAudit("cirugias",form.id,"insert",{tipo:form.tipo,fecha:form.fecha,hospital:form.hospital});}else{const prev=cirugias.find(c=>c.id===form.id);const{id,...d}=form;await dbUpdate("cirugias",id,d,session);if(prev){const ch={};["tipo","fecha","inicio","fin","hospital","cirujano","ayudante","enfermera","paciente","estado","factura","obs","quirofano"].forEach(k=>{if(String(prev[k]||"")!==String(form[k]||""))ch[k]={de:prev[k]||"",a:form[k]||""};});if(Object.keys(ch).length>0)await logAudit("cirugias",id,"update",ch);}}await loadAll();setModal(null);}catch{alert("Error al guardar.");}finally{setSaving(false);}
   };
-  const delCx=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await logAudit("cirugias",id,"delete",{});await dbDelete("cirugias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
+  const delCx=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await logAudit("cirugias",id,"delete",{});await dbDelete("cirugias",id,session);await loadAll();setModal(null);}catch{alert("Error.");}};
   const duplicarCx=()=>{setForm({...form,id:newId(),estado:"Confirmada",factura:"Pendiente"});setModal("cx_n");};
-  const updFact=async(id,v)=>{try{await dbUpdate("cirugias",id,{factura:v});setCirugias(p=>p.map(c=>c.id===id?{...c,factura:v}:c));}catch{alert("Error.");}};
+  const updFact=async(id,v)=>{try{await dbUpdate("cirugias",id,{factura:v},session);setCirugias(p=>p.map(c=>c.id===id?{...c,factura:v}:c));}catch{alert("Error.");}};
 
   // ── Guardias ──
   const openGuardia=(fecha,hospital)=>{const e=guardias.find(g=>g.fecha===fecha&&g.hospital===hospital);setForm(e?{...e}:{fecha,hospital,cirujano_principal:"",cirujano_ayudante:"",notas:""});setModal("g_edit");};
   const saveGuardia=async()=>{
     const ausentes=[form.cirujano_principal,form.cirujano_ayudante].filter(Boolean).filter(n=>estaAusente(n,form.fecha));
     if(ausentes.length>0){alert(`⛔ ${ausentes.join(", ")} no está${ausentes.length>1?"n":""} disponible${ausentes.length>1?"s":""} el ${form.fecha}.`);return;}
-    setSaving(true);try{if(form.id){const{id,...d}=form;await dbUpdate("guardias",id,d);}else await dbInsert("guardias",form);await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);}
+    setSaving(true);try{if(form.id){const{id,...d}=form;await dbUpdate("guardias",id,d,session);}else await dbInsert("guardias",form,session);await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);}
   };
-  const delGuardia=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("guardias",id);await loadAll();setModal(null);}catch{alert("Error.");}};
+  const delGuardia=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbDelete("guardias",id,session);await loadAll();setModal(null);}catch{alert("Error.");}};
 
   // ── Sugerencias de guardia ──
   const openSugerencia=()=>{setForm({fecha:todayStr,hospital:hospNames[0]||"",nota:""});setModal("sug_n");};
@@ -469,23 +469,22 @@ export default function App(){
     if(!form.fecha||!form.hospital){alert("Selecciona fecha y hospital.");return;}
     setSaving(true);
     try{
-      await dbInsert("sugerencias_guardia",{...form,usuario_id:authUser?.id,usuario_nombre:perfil?.nombre||perfil?.email,estado:"pendiente"});
+      await dbInsert("sugerencias_guardia",{...form,usuario_id:authUser?.id,usuario_nombre:perfil?.nombre||perfil?.email,estado:"pendiente"},session);
       await loadAll();setModal(null);
-    }catch{alert("Error.");}finally{setSaving(false);};
+    }catch{alert("Error.");}finally{setSaving(false);}
   };
   const aprobarSug=async(sug)=>{
     try{
-      // Crear guardia real
       const existe=guardias.find(g=>g.fecha===sug.fecha&&g.hospital===sug.hospital);
-      if(!existe)await dbInsert("guardias",{fecha:sug.fecha,hospital:sug.hospital,cirujano_principal:sug.usuario_nombre,notas:sug.nota||""});
-      await dbUpdate("sugerencias_guardia",sug.id,{estado:"aprobada"});
+      if(!existe)await dbInsert("guardias",{fecha:sug.fecha,hospital:sug.hospital,cirujano_principal:sug.usuario_nombre,notas:sug.nota||""},session);
+      await dbUpdate("sugerencias_guardia",sug.id,{estado:"aprobada"},session);
       await createNotif(sug.usuario_id,`✅ Tu sugerencia de guardia para el ${sug.fecha} en ${sug.hospital} ha sido APROBADA.`);
       await loadAll();
     }catch{alert("Error.");}
   };
   const rechazarSug=async(sug)=>{
     try{
-      await dbUpdate("sugerencias_guardia",sug.id,{estado:"rechazada"});
+      await dbUpdate("sugerencias_guardia",sug.id,{estado:"rechazada"},session);
       await createNotif(sug.usuario_id,`❌ Tu sugerencia de guardia para el ${sug.fecha} en ${sug.hospital} ha sido RECHAZADA.`);
       await loadAll();
     }catch{alert("Error.");}
@@ -499,16 +498,16 @@ export default function App(){
     try{
       const path=`${Date.now()}-${form._file.name.replace(/\s/g,"_")}`;
       await uploadDoc(path,form._file,session);
-      await dbInsert("documentos",{nombre:form.nombre,descripcion:form.descripcion||"",categoria:form.categoria,url:path,tamanyo:fmtSize(form._file.size),subido_por:perfil?.nombre||perfil?.email});
+      await dbInsert("documentos",{nombre:form.nombre,descripcion:form.descripcion||"",categoria:form.categoria,url:path,tamanyo:fmtSize(form._file.size),subido_por:perfil?.nombre||perfil?.email},session);
       await loadAll();setModal(null);
     }catch{alert("Error al subir archivo.");}finally{setUploading(false);}
   };
   const descargarDoc=async(doc)=>{
-    try{const url=await getSignedUrl(doc.url,session);window.open(url,"_blank");}catch{alert("Error al generar enlace.");}
+    try{const url=await getSignedUrl(doc.url,session);window.open(url,"_blank");}catch(e){alert(e?.message||"Error al generar enlace.");}
   };
   const eliminarDoc=async(doc)=>{
     if(!confirm("¿Eliminar este documento?"))return;
-    try{await deleteStorageFile(doc.url,session);await dbDelete("documentos",doc.id);await loadAll();}catch{alert("Error.");}
+    try{await deleteStorageFile(doc.url,session);await dbDelete("documentos",doc.id,session);await loadAll();}catch{alert("Error.");}
   };
 
   // ── Quirófanos / Consultas ──
@@ -530,7 +529,7 @@ export default function App(){
         if(ex)await dbUpdate("quirofanos_estado",ex.id,{cerrado:false,cirujano:cirujano||""},session);
         else await dbInsert("quirofanos_estado",{hospital,quirofano,fecha,turno,cerrado:false,cirujano:cirujano||""},session);
       }
-      const qe=await dbGet("quirofanos_estado","order=fecha.asc");setQuirEstados(qe);
+      const qe=await dbGet("quirofanos_estado",`order=fecha.asc&fecha=gte.${fmt(new Date(today.getFullYear()-1,today.getMonth(),today.getDate()))}`,session);setQuirEstados(qe);
       if(estadoNuevo!=="abierto"&&estadoNuevo!=="asignado")setQuirEditSlot(null);
     }catch{alert("Error.");}finally{setSaving(false);}
   };
@@ -554,14 +553,14 @@ export default function App(){
 
   // ── Personal ──
   const openNewP=()=>{setForm({nombre:"",rol:"Cirujano",hospitales:[],tel:"",color:COLORES[0],activo:true});setModal("p_n");};
-  const saveP=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="p_n")await dbInsert("personal",form);else{const{id,...d}=form;await dbUpdate("personal",id,d);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);};};
-  const delP=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbUpdate("personal",id,{activo:false});await loadAll();setModal(null);}catch{alert("Error.");}};
+  const saveP=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="p_n")await dbInsert("personal",form,session);else{const{id,...d}=form;await dbUpdate("personal",id,d,session);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);}};
+  const delP=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbUpdate("personal",id,{activo:false},session);await loadAll();setModal(null);}catch{alert("Error.");}};
   const togH=(h)=>{const a=form.hospitales||[];setForm({...form,hospitales:a.includes(h)?a.filter(x=>x!==h):[...a,h]});};
 
   // ── Hospitales ──
   const openNewH=()=>{setForm({nombre:"",direccion:"",activo:true});setModal("h_n");};
-  const saveH=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="h_n")await dbInsert("hospitales",form);else{const{id,...d}=form;await dbUpdate("hospitales",id,d);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);};};
-  const delH=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbUpdate("hospitales",id,{activo:false});await loadAll();setModal(null);}catch{alert("Error.");}};
+  const saveH=async()=>{if(!form.nombre?.trim()){alert("Nombre obligatorio.");return;}setSaving(true);try{if(modal==="h_n")await dbInsert("hospitales",form,session);else{const{id,...d}=form;await dbUpdate("hospitales",id,d,session);}await loadAll();setModal(null);}catch{alert("Error.");}finally{setSaving(false);}};
+  const delH=async(id)=>{if(!confirm("¿Eliminar?"))return;try{await dbUpdate("hospitales",id,{activo:false},session);await loadAll();setModal(null);}catch{alert("Error.");}};
 
   // ── Usuarios (admin) ──
   const aprobarU=async(id)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};

@@ -302,6 +302,7 @@ export default function App(){
   const handleLogout=async()=>{if(session)await authSignOut(session).catch(()=>{});localStorage.removeItem("cirmi_token");setSession(null);setAuthUser(null);setPerfil(null);};
 
   useEffect(()=>{if(session&&perfil?.estado==="aprobado")loadAll();},[session,perfil?.estado]);
+  useEffect(()=>{if(isEnfermero&&!["agenda","quirofanos"].includes(tab))setTab("agenda");},[isEnfermero]);
   useEffect(()=>{window.scrollTo({top:0,behavior:"smooth"});},[tab]);
   useEffect(()=>{const t=setInterval(()=>{const s=fmt(new Date());if(s!==_liveDate)_setLiveDate(s);},30000);return()=>clearInterval(t);},[_liveDate]);
 
@@ -353,12 +354,13 @@ export default function App(){
   const addMiAusencia=async()=>{
     if(!miAusForm.fecha_inicio||!miAusForm.fecha_fin||miAusForm.fecha_fin<miAusForm.fecha_inicio){alert("Fechas inválidas.");return;}
     const miP=personal.find(p=>p.nombre===perfil?.nombre);
+    if(!miP){alert("Tu cuenta no está vinculada a ningún profesional.\nPide al administrador que te vincule en Config → Usuarios.");return;}
     setSaving(true);
     try{
-      await dbInsert("ausencias",{personal_id:miP?.id||null,personal_nombre:perfil?.nombre||"",fecha_inicio:miAusForm.fecha_inicio,fecha_fin:miAusForm.fecha_fin,motivo:miAusForm.motivo||""},session);
+      await dbInsert("ausencias",{personal_id:miP.id,personal_nombre:miP.nombre,fecha_inicio:miAusForm.fecha_inicio,fecha_fin:miAusForm.fecha_fin,motivo:miAusForm.motivo||""},session);
       const au2=await dbGet("ausencias","order=fecha_inicio.asc",session);setAusencias(au2);
       setShowMiAusForm(false);setMiAusForm({fecha_inicio:todayStr,fecha_fin:todayStr,motivo:""});
-    }catch{alert("Error al guardar.");}finally{setSaving(false);}
+    }catch(e){alert("Error al guardar: "+(e?.message||"desconocido"));}finally{setSaving(false);}
   };
   // Opciones de personal para selects — ausentes deshabilitadas según fecha
   const pOpts=(fecha,inclVacio=false,emptyLabel="— Sin asignar —",filtroRol=null)=>{
@@ -605,15 +607,11 @@ export default function App(){
 
   // ── TABS config ──
   const TABS=[
-    ["inicio","🏠","Inicio"],
+    ...(!isEnfermero?[["inicio","🏠","Inicio"]]:[]),
     ["agenda","📅","Agenda"],
-    ["programacion","👨‍⚕️","Programa"],
-    ["guardias","🛡️","Guardias"],
+    ...(!isEnfermero?[["programacion","👨‍⚕️","Programa"],["guardias","🛡️","Guardias"]]:[]),
     ["quirofanos","🏥","Quirófanos"],
-    ["consultas","🩺","Consultas"],
-    ["hospitales","🏨","Hospitales"],
-    ["personal","👥","Personal"],
-    ["documentos","📁","Documentos"],
+    ...(!isEnfermero?[["consultas","🩺","Consultas"],["hospitales","🏨","Hospitales"],["personal","👥","Personal"],["documentos","📁","Documentos"]]:[]),
     ...(isAdmin?[["facturacion","💰","Facturación"],["config","⚙️","Config"]]:[]),
   ];
 
@@ -780,10 +778,12 @@ export default function App(){
       {/* Mobile bottom tab bar */}
       {mob&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:B.slateDark,zIndex:90,borderTop:`1px solid rgba(255,255,255,.1)`,display:"flex",justifyContent:"space-around",padding:"6px 0 env(safe-area-inset-bottom)"}}>
-          {[["agenda","📅"],["guardias","🛡️"],["documentos","📁"],["facturacion","💰"],["config","⚙️"]].filter(([id])=>(id!=="config"&&id!=="facturacion")||isAdmin).map(([id,icon])=>(
+          {(isEnfermero?[["agenda","📅"],["quirofanos","🏥"]]:
+            [["agenda","📅"],["guardias","🛡️"],["documentos","📁"],["facturacion","💰"],["config","⚙️"]]
+          ).filter(([id])=>(id!=="config"&&id!=="facturacion")||isAdmin).map(([id,icon])=>(
             <button key={id} onClick={()=>setTab(id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"4px 12px",border:"none",background:"none",color:tab===id?B.gold:"rgba(255,255,255,.5)",fontSize:tab===id?20:18,fontWeight:700,cursor:"pointer",position:"relative",minWidth:48}}>
               {icon}
-              <span style={{fontSize:9,fontWeight:600}}>{{"agenda":"Agenda","guardias":"Guardias","documentos":"Docs","facturacion":"Facturas","config":"Config"}[id]}</span>
+              <span style={{fontSize:9,fontWeight:600}}>{{"agenda":"Agenda","quirofanos":"Quiróf.","guardias":"Guardias","documentos":"Docs","facturacion":"Facturas","config":"Config"}[id]}</span>
               {id==="guardias"&&sugPend.length>0&&isAdmin&&<span style={{position:"absolute",top:0,right:6,background:"#EF4444",color:"white",borderRadius:10,padding:"0 3px",fontSize:8,fontWeight:700}}>{sugPend.length}</span>}
             </button>
           ))}

@@ -571,7 +571,7 @@ export default function App(){
 
   // ── Usuarios (admin) ──
   const aprobarU=async(id)=>{try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"aprobado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
-  const bloquearU=async(id)=>{if(!confirm("¿Bloquear?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
+
   const hacerAdmin=async(id)=>{if(!confirm("¿Dar permisos de admin?"))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({rol:"admin",rol_app:"admin"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const rechazarU=async(id,nombre)=>{if(!confirm(`¿Rechazar la solicitud de ${nombre||"este usuario"}? Se bloqueará el acceso.`))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"PATCH",headers:H(session),body:JSON.stringify({estado:"bloqueado"})});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error.");}};
   const eliminarU=async(id,nombre)=>{if(!confirm(`¿Eliminar el perfil de ${nombre||"este usuario"}? Esta acción no se puede deshacer.`))return;try{await fetch(`${API("perfiles")}?id=eq.${id}`,{method:"DELETE",headers:H(session)});const pf=await dbGet("perfiles","order=created_at.desc",session);setPerfiles(pf);}catch{alert("Error al eliminar.");}};

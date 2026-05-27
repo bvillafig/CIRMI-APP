@@ -1925,7 +1925,7 @@ export default function App(){
                               {estado==="pendiente"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>✓ Aprobar</button>}
                               {estado==="pendiente"&&<button className="btn-sm-danger" onClick={()=>rechazarU(u.id,u.nombre||u.email)}>✗ Rechazar</button>}
                               {estado==="aprobado"&&u.id!==authUser?.id&&u.rol!=="admin"&&<button className="btn-sec" style={{padding:"4px 9px",fontSize:12}} onClick={()=>hacerAdmin(u.id)}>👑 Admin</button>}
-                              {u.id!==authUser?.id&&estado!=="bloqueado"&&estado!=="pendiente"&&<button className="btn-sm-danger" onClick={()=>bloquearU(u.id)}>Bloquear</button>}
+                              {u.id!==authUser?.id&&estado!=="pendiente"&&estado!=="bloqueado"&&<button className="btn-sm-danger" style={{background:"#7F1D1D"}} onClick={()=>eliminarU(u.id,u.nombre||u.email)}>🗑 Eliminar</button>}
                               {estado==="bloqueado"&&<button className="btn-green" onClick={()=>aprobarU(u.id)}>Reactivar</button>}
                               {estado==="bloqueado"&&<button className="btn-sm-danger" style={{background:"#7F1D1D"}} onClick={()=>eliminarU(u.id,u.nombre||u.email)}>🗑 Eliminar</button>}
                             </div>

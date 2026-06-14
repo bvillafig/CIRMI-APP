@@ -131,7 +131,8 @@ const ColH=({children})=><div style={{fontSize:11,fontWeight:700,color:B.muted,t
 const Spin=({text="Cargando..."})=>(<div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"60px 0",gap:14}}><div style={{width:32,height:32,border:`3px solid ${B.border}`,borderTopColor:B.slate,borderRadius:"50%",animation:"spin 1s linear infinite"}}/><div style={{color:B.muted,fontSize:13}}>{text}</div></div>);
 
 // ─── CALENDARIO MENSUAL ────────────────────────────────────────
-function CalMes({year,month,renderDay,onPrev,onNext,onToday,holidays}){
+function CalMes({year,month,renderDay,onPrev,onNext,onToday,holidays,todayStr:tStr}){
+  const todayStr=tStr||fmt(new Date());
   const first=new Date(year,month,1),last=new Date(year,month+1,0);
   let sd=first.getDay()-1; if(sd<0)sd=6;
   const cells=[];
@@ -441,16 +442,18 @@ export default function App(){
   // ── Cirugías ──
   const openNewCx=(fecha,opts={})=>{
     const f=fecha||(tab==="quirofanos"?quirDate:tab==="consultas"?consDate:selDate);
-    const hosp=opts.hospital||(tab==="quirofanos"?quirHosp:tab==="consultas"?consHosp:tab==="guardias"?guardHosp:null)||hospNames[0]||"";
+    const _h=tab==="quirofanos"?quirHosp:tab==="consultas"?consHosp:tab==="guardias"?guardHosp:null;
+    const hosp=opts.hospital||(_h==="Todos"?null:_h)||hospNames[0]||"";
     const quir=opts.quirofano||"Q-1";
     const defCir=personal.find(p=>p.rol?.toLowerCase().includes(ROL_CIRUJANO))?.nombre||"";
     setForm({id:newId(),fecha:f,hospital:hosp,quirofano:quir,tipo:"",cirujano:defCir,ayudante:"",enfermera:"",inicio:"08:00",fin:"10:00",estado:"Confirmada",factura:"Pendiente",paciente:"",obs:""});
     setModal("cx_n");
   };
   const saveCx=async()=>{
+    if(!form.fecha||!form.tipo?.trim()||!form.hospital||!form.cirujano){alert("Completa los campos obligatorios: fecha, tipo, hospital y cirujano.");return;}
     const turno=turnoFromHora(form.inicio);
     if(form.fecha&&form.quirofano&&form.inicio&&form.hospital&&esCerradoQuir(form.hospital,form.quirofano,form.fecha,turno)){
-      alert(`⛔ ${form.quirofano} está cerrado para el turno ${turno} del ${form.fecha}.\nAbrí el quirófano antes de agendar.`);
+      alert(`⛔ ${form.quirofano} está cerrado para el turno ${turno} del ${form.fecha}.\nAbre el quirófano antes de agendar.`);
       return;
     }
     const ausentes=[form.cirujano,form.ayudante,form.enfermera].filter(Boolean).filter(n=>estaAusente(n,form.fecha));
@@ -1036,7 +1039,7 @@ export default function App(){
                     onPrev={()=>prevM(calY,calM,setCalY,setCalM)}
                     onNext={()=>nextM(calY,calM,setCalY,setCalM)}
                     onToday={()=>{setCalY(today.getFullYear());setCalM(today.getMonth());setSelDate(todayStr);}}
-                    holidays={festivosCat(calY)}
+                    holidays={festivosCat(calY)} todayStr={todayStr}
                     renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                       const dc=cirugias.filter(c=>c.fecha===dateStr),isSel=dateStr===selDate;
                       const porClinica=hospitales.map((h,idx)=>({nombre:h.nombre,color:ACCENTS[idx%ACCENTS.length],n:dc.filter(c=>c.hospital===h.nombre).length})).filter(x=>x.n>0);
@@ -1248,7 +1251,7 @@ export default function App(){
                 onPrev={()=>prevM(gY,gM,setGY,setGM)}
                 onNext={()=>nextM(gY,gM,setGY,setGM)}
                 onToday={()=>{setGY(today.getFullYear());setGM(today.getMonth());}}
-                holidays={festivosCat(gY)}
+                holidays={festivosCat(gY)} todayStr={todayStr}
                 renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                   if(guardHosp==="Todos"){
                     const hgs=hospNames.map((h,i)=>({h,color:ACCENTS[i%ACCENTS.length],g:guardias.find(x=>x.fecha===dateStr&&x.hospital===h)}));
@@ -1527,7 +1530,7 @@ export default function App(){
                   onPrev={()=>prevM(consY,consM,setConsY,setConsM)}
                   onNext={()=>nextM(consY,consM,setConsY,setConsM)}
                   onToday={()=>{setConsY(today.getFullYear());setConsM(today.getMonth());setConsDate(todayStr);}}
-                  holidays={festivosCat(consY)}
+                  holidays={festivosCat(consY)} todayStr={todayStr}
                   renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                     const isSel=dateStr===consDate;
                     if(consHosp==="Todos"){
@@ -1677,7 +1680,7 @@ export default function App(){
                 onPrev={()=>prevM(hospY,hospM,setHospY,setHospM)}
                 onNext={()=>nextM(hospY,hospM,setHospY,setHospM)}
                 onToday={()=>{setHospY(today.getFullYear());setHospM(today.getMonth());setSelDate(todayStr);}}
-                holidays={festivosCat(hospY)}
+                holidays={festivosCat(hospY)} todayStr={todayStr}
                 renderDay={({day,dateStr,isToday,isWeekend,isHoliday,col})=>{
                   const isSel=dateStr===selDate;
                   const hospDots=hospitales.map((h,idx)=>({h,color:ACCENTS[idx%ACCENTS.length],n:cirugias.filter(c=>c.hospital===h.nombre&&c.fecha===dateStr).length})).filter(x=>x.n>0);

@@ -450,7 +450,7 @@ export default function App(){
     setModal("cx_n");
   };
   const saveCx=async()=>{
-    if(!form.fecha||!form.tipo?.trim()||!form.hospital||!form.cirujano){alert("Completa los campos obligatorios: fecha, tipo, hospital y cirujano.");return;}
+    if(!form.fecha||!form.tipo?.trim()||!form.hospital){alert("Completa los campos obligatorios: fecha, tipo de intervención y hospital.");return;}
     const turno=turnoFromHora(form.inicio);
     if(form.fecha&&form.quirofano&&form.inicio&&form.hospital&&esCerradoQuir(form.hospital,form.quirofano,form.fecha,turno)){
       alert(`⛔ ${form.quirofano} está cerrado para el turno ${turno} del ${form.fecha}.\nAbre el quirófano antes de agendar.`);

@@ -1047,7 +1047,7 @@ export default function App(){
               {/* Toolbar */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
                 <div style={{display:"flex",gap:3,background:B.bg,borderRadius:9,padding:3}}>
-                  {[["mes","Mes"],["semana","Semana"]].map(([v,l])=>(
+                  {[["mes","Mes"],["semana","Semana"],["cirujano","Por cirujano"]].map(([v,l])=>(
                     <button key={v} onClick={()=>setAgendaVista(v)} style={{padding:"6px 14px",border:"none",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",background:agendaVista===v?"white":B.bg,color:agendaVista===v?B.slateDark:B.muted,boxShadow:agendaVista===v?"0 1px 3px rgba(0,0,0,.08)":"none",transition:"all .15s"}}>{l}</button>
                   ))}
                 </div>
@@ -1172,6 +1172,207 @@ export default function App(){
                         </div>
                       </div>
                     ))}
+                  </div>
+                );
+              })()}
+
+              {/* ── Vista Por Cirujano ── */}
+              {agendaVista==="cirujano"&&(()=>{
+                const cirujanos=personal.filter(p=>p.rol?.toLowerCase().includes(ROL_CIRUJANO));
+                const prevDia=()=>{const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()-1);setSelDate(fmt(d));};
+                const nextDia=()=>{const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()+1);setSelDate(fmt(d));};
+                const HORAS=["08","09","10","11","12","13","14","15","16","17","18","19","20"];
+                const t2min=(t)=>{if(!t)return null;const[h,m]=t.split(":").map(Number);return h*60+m;};
+                const GRID_START=8*60,GRID_END=21*60,GRID_H=GRID_END-GRID_START;
+                return(
+                  <div>
+                    {/* Cabecera de día */}
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                      <button className="btn-sec" style={{padding:"5px 10px",fontSize:13}} onClick={prevDia}>←</button>
+                      <button className="btn-sec" style={{padding:"5px 10px",fontSize:12}} onClick={()=>setSelDate(todayStr)}>Hoy</button>
+                      <button className="btn-sec" style={{padding:"5px 10px",fontSize:13}} onClick={nextDia}>→</button>
+                      <h3 style={{fontSize:16,fontWeight:700,color:B.slateDark,margin:0}}>
+                        {selDate===todayStr?"Hoy — ":""}{selDate}
+                        <span style={{fontWeight:400,fontSize:12,color:B.muted,marginLeft:8}}>
+                          {DIAS_H[(new Date(selDate+'T12:00:00').getDay()+6)%7]}
+                        </span>
+                      </h3>
+                      {canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{padding:"6px 12px",fontSize:12,marginLeft:"auto"}}>+ Añadir</button>}
+                    </div>
+
+                    {/* Filtro hospital */}
+                    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+                      <select className="inp" style={{width:mob?"100%":160,padding:"6px 10px",fontSize:12}} value={agFiltHosp} onChange={e=>setAgFiltHosp(e.target.value)}>
+                        <option value="Todos">Todos los hospitales</option>
+                        {hospNames.map(h=><option key={h}>{h}</option>)}
+                      </select>
+                      <select className="inp" style={{width:mob?"100%":130,padding:"6px 10px",fontSize:12}} value={agFiltEst} onChange={e=>setAgFiltEst(e.target.value)}>
+                        <option value="Todos">Todos los estados</option>
+                        {ESTADOS_CX.map(e=><option key={e}>{e}</option>)}
+                      </select>
+                    </div>
+
+                    {mob?(
+                      /* ── MÓVIL: tarjetas verticales ── */
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        {cirujanos.map(p=>{
+                          const misCx=cirugias.filter(c=>c.fecha===selDate&&(c.cirujano===p.nombre||c.ayudante===p.nombre)&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst)).sort((a,b)=>(a.inicio||"").localeCompare(b.inicio||""));
+                          const misQuir=quirEstados.filter(e=>e.fecha===selDate&&e.cirujano===p.nombre&&!e.cerrado);
+                          const ausente=estaAusente(p.nombre,selDate);
+                          if(misCx.length===0&&misQuir.length===0&&!ausente)return null;
+                          return(
+                            <div key={p.id} style={{background:"white",borderRadius:13,overflow:"hidden",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
+                              <div style={{background:p.color||B.slate,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+                                <div className="avatar" style={{background:"rgba(255,255,255,.25)",width:32,height:32,fontSize:12}}>{(p.nombre||"?").split(" ").map(w=>w[0]).join("").slice(0,2)}</div>
+                                <div style={{flex:1}}>
+                                  <div style={{color:"white",fontWeight:700,fontSize:13}}>{p.nombre}</div>
+                                  <div style={{color:"rgba(255,255,255,.7)",fontSize:11}}>{misCx.length} cirugía{misCx.length!==1?"s":""}{misQuir.length>0?` · ${misQuir.length} quirófano${misQuir.length!==1?"s":""} asignado${misQuir.length!==1?"s":""}`:""}
+                                  </div>
+                                </div>
+                                {ausente&&<span style={{background:"#B91C1C",color:"white",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:700}}>AUSENTE</span>}
+                              </div>
+                              {misQuir.length>0&&(
+                                <div style={{padding:"7px 14px",background:"#F0FDF4",borderBottom:`1px solid #BBF7D0`,display:"flex",gap:6,flexWrap:"wrap"}}>
+                                  {misQuir.map(q=><span key={q.id} style={{fontSize:11,fontWeight:600,color:"#166534",background:"#DCFCE7",borderRadius:6,padding:"2px 8px"}}>🏥 {q.quirofano} {q.turno}</span>)}
+                                </div>
+                              )}
+                              {misCx.length===0?(
+                                <div style={{padding:"12px 14px",fontSize:12,color:B.muted,fontStyle:"italic"}}>Sin cirugías este día</div>
+                              ):misCx.map(c=>(
+                                <div key={c.id} style={{padding:"10px 14px",borderBottom:`1px solid ${B.border}`,cursor:canCreate?"pointer":"default"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                                    <div style={{flex:1}}>
+                                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                                        <span style={{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:600,color:p.color||B.slate}}>{c.inicio}–{c.fin}</span>
+                                        <Bdg label={c.estado} bg={bEst(c.estado)} color={ceColor(c.estado)}/>
+                                      </div>
+                                      <div style={{fontWeight:600,fontSize:13}}>{c.tipo}</div>
+                                      <div style={{fontSize:11,color:B.muted}}>{c.hospital} · {c.quirofano}</div>
+                                      {c.cirujano!==p.nombre&&<div style={{fontSize:10,color:B.goldDark,marginTop:1}}>como ayudante</div>}
+                                    </div>
+                                    <Bdg label={c.factura} bg={bFact(c.factura)} color={cFact(c.factura)}/>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                        {/* Sin cirujano asignado */}
+                        {(()=>{const sinCir=cirugias.filter(c=>c.fecha===selDate&&!c.cirujano&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst));
+                          if(sinCir.length===0)return null;
+                          return(<div style={{background:"white",borderRadius:13,overflow:"hidden",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
+                            <div style={{background:"#94A3B8",padding:"10px 14px"}}><div style={{color:"white",fontWeight:700,fontSize:13}}>Sin cirujano asignado ({sinCir.length})</div></div>
+                            {sinCir.map(c=><div key={c.id} style={{padding:"10px 14px",borderBottom:`1px solid ${B.border}`,cursor:canCreate?"pointer":"default"}} onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}><div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:B.muted}}>{c.inicio}–{c.fin}</div><div style={{fontWeight:600,fontSize:13}}>{c.tipo}</div><div style={{fontSize:11,color:B.muted}}>{c.hospital} · {c.quirofano}</div></div>)}
+                          </div>);
+                        })()}
+                      </div>
+                    ):(
+                      /* ── ESCRITORIO: grid horario con línea de tiempo ── */
+                      <div style={{display:"flex",gap:0,overflowX:"auto",border:`1px solid ${B.border}`,borderRadius:14,background:"white",boxShadow:"0 1px 4px rgba(46,63,82,.07)"}}>
+                        {/* Columna de horas */}
+                        <div style={{width:48,flexShrink:0,borderRight:`1px solid ${B.border}`}}>
+                          <div style={{height:52,borderBottom:`1px solid ${B.border}`,background:"#F8FAFC"}}/>
+                          <div style={{position:"relative",height:GRID_H*1.2}}>
+                            {HORAS.map(h=>(
+                              <div key={h} style={{position:"absolute",top:`${(parseInt(h)*60-GRID_START)*1.2}px`,width:"100%",paddingLeft:6,fontSize:9,fontWeight:600,color:B.muted,lineHeight:1}}>{h}:00</div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Columnas por cirujano */}
+                        {(()=>{
+                          const cols=cirujanos.map(p=>{
+                            const misCx=cirugias.filter(c=>c.fecha===selDate&&(c.cirujano===p.nombre||c.ayudante===p.nombre)&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst));
+                            const misQuir=quirEstados.filter(e=>e.fecha===selDate&&e.cirujano===p.nombre&&!e.cerrado);
+                            const ausente=estaAusente(p.nombre,selDate);
+                            return{p,misCx,misQuir,ausente};
+                          }).filter(({misCx,misQuir,ausente})=>misCx.length>0||misQuir.length>0||ausente);
+                          const sinCir=cirugias.filter(c=>c.fecha===selDate&&!c.cirujano&&(agFiltHosp==="Todos"||c.hospital===agFiltHosp)&&(agFiltEst==="Todos"||c.estado===agFiltEst));
+                          const allCols=[...cols,...(sinCir.length>0?[{p:null,misCx:sinCir,misQuir:[],ausente:false}]:[])];
+                          if(allCols.length===0)return(
+                            <div style={{flex:1,padding:"40px",textAlign:"center",color:B.muted}}>
+                              <div style={{fontSize:28,marginBottom:8}}>📋</div>
+                              <div style={{fontWeight:600}}>Sin cirugías ni asignaciones este día</div>
+                              {canCreate&&<button className="btn-gold" onClick={()=>openNewCx(selDate)} style={{marginTop:12}}>+ Añadir</button>}
+                            </div>
+                          );
+                          const colW=Math.max(180,Math.floor(800/allCols.length));
+                          return allCols.map(({p,misCx,misQuir,ausente},ci)=>(
+                            <div key={p?.id||"sin"} style={{width:colW,minWidth:colW,flexShrink:0,borderRight:ci<allCols.length-1?`1px solid ${B.border}`:"none"}}>
+                              {/* Header cirujano */}
+                              <div style={{height:52,borderBottom:`1px solid ${B.border}`,background:p?(ausente?"#FEE2E2":`${p.color||B.slate}18`):"#F1F5F9",padding:"8px 10px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+                                {p?(
+                                  <>
+                                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                      <div className="avatar" style={{background:p.color||B.slate,width:22,height:22,fontSize:8,flexShrink:0}}>{(p.nombre||"?").split(" ").map(w=>w[0]).join("").slice(0,2)}</div>
+                                      <div style={{fontWeight:700,fontSize:12,color:ausente?"#B91C1C":B.slateDark,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                                      {ausente&&<span style={{background:"#B91C1C",color:"white",borderRadius:6,padding:"1px 5px",fontSize:9,fontWeight:700,flexShrink:0}}>AUSENTE</span>}
+                                    </div>
+                                    <div style={{fontSize:10,color:B.muted,marginTop:2,paddingLeft:28}}>{misCx.length} cx{misQuir.map(q=><span key={q.id} style={{marginLeft:5,background:"#DCFCE7",color:"#166534",borderRadius:4,padding:"0 4px",fontWeight:600}}>{q.quirofano} {q.turno}</span>)}</div>
+                                  </>
+                                ):(
+                                  <div style={{fontWeight:700,fontSize:12,color:B.muted}}>⚠ Sin cirujano ({misCx.length})</div>
+                                )}
+                              </div>
+                              {/* Grid de tiempo */}
+                              <div style={{position:"relative",height:GRID_H*1.2,background:ausente?"#FEF2F2":"white"}}>
+                                {/* Líneas de hora */}
+                                {HORAS.map(h=>(
+                                  <div key={h} style={{position:"absolute",top:`${(parseInt(h)*60-GRID_START)*1.2}px`,left:0,right:0,borderTop:`1px solid ${B.border}`,opacity:.5}}/>
+                                ))}
+                                {/* Bloque turno mañana (08-15) */}
+                                {misQuir.filter(q=>q.turno==="mañana").length>0&&(
+                                  <div style={{position:"absolute",top:0,left:2,right:2,height:`${(15*60-GRID_START)*1.2}px`,background:`${p?.color||"#2E7D52"}11`,borderRadius:6,border:`1px dashed ${p?.color||"#2E7D52"}55`,pointerEvents:"none"}}/>
+                                )}
+                                {/* Bloque turno tarde (15-21) */}
+                                {misQuir.filter(q=>q.turno==="tarde").length>0&&(
+                                  <div style={{position:"absolute",top:`${(15*60-GRID_START)*1.2}px`,left:2,right:2,bottom:0,background:`${p?.color||"#2E7D52"}11`,borderRadius:6,border:`1px dashed ${p?.color||"#2E7D52"}55`,pointerEvents:"none"}}/>
+                                )}
+                                {/* Cirugías */}
+                                {misCx.map(c=>{
+                                  const s=t2min(c.inicio),e=t2min(c.fin);
+                                  if(s===null||e===null)return null;
+                                  const top=Math.max(0,(s-GRID_START)*1.2);
+                                  const h=Math.max(20,(e-s)*1.2);
+                                  const esPrincipal=c.cirujano===p?.nombre;
+                                  const col=p?.color||B.slate;
+                                  return(
+                                    <div key={c.id}
+                                      onClick={()=>{if(canCreate){setForm({...c});setModal("cx_e");}}}
+                                      title={`${c.inicio}–${c.fin} · ${c.tipo}${c.paciente?" · "+c.paciente:""}${!esPrincipal?" (ayudante)":""}`}
+                                      style={{
+                                        position:"absolute",top:`${top}px`,left:3,right:3,height:`${h}px`,
+                                        background:esPrincipal?col:`${col}66`,
+                                        borderRadius:6,padding:"3px 6px",cursor:canCreate?"pointer":"default",
+                                        overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.15)",
+                                        border:esPrincipal?"none":`1px dashed ${col}`,
+                                        transition:"filter .1s",zIndex:1,
+                                      }}
+                                      onMouseEnter={e=>e.currentTarget.style.filter="brightness(.92)"}
+                                      onMouseLeave={e=>e.currentTarget.style.filter="none"}>
+                                      <div style={{fontSize:9,fontWeight:700,color:"white",lineHeight:1.3,overflow:"hidden"}}>
+                                        {c.inicio}–{c.fin}
+                                      </div>
+                                      {h>28&&<div style={{fontSize:10,fontWeight:600,color:"white",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.tipo}</div>}
+                                      {h>44&&<div style={{fontSize:9,color:"rgba(255,255,255,.8)",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.hospital}{c.quirofano&&` · ${c.quirofano}`}</div>}
+                                      {!esPrincipal&&h>20&&<div style={{fontSize:8,color:"rgba(255,255,255,.7)",fontStyle:"italic"}}>ayudante</div>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Leyenda */}
+                    <div style={{display:"flex",gap:14,marginTop:12,flexWrap:"wrap"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:10,borderRadius:3,background:B.slate}}/><span style={{fontSize:11,color:B.muted}}>Cirujano principal</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:10,borderRadius:3,background:`${B.slate}66`,border:`1px dashed ${B.slate}`}}/><span style={{fontSize:11,color:B.muted}}>Ayudante</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:10,borderRadius:3,border:`1px dashed #2E7D52`,background:"#2E7D5211"}}/><span style={{fontSize:11,color:B.muted}}>Quirófano asignado</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:10,borderRadius:3,background:"#FEE2E2"}}/><span style={{fontSize:11,color:B.muted}}>Ausente</span></div>
+                    </div>
                   </div>
                 );
               })()}

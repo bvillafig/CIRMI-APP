@@ -17,6 +17,7 @@ const dbDelete = async (t,id,tok)    => { const r=await fetch(`${API(t)}?id=eq.$
 // Auth
 const authSignUp = async (email,pwd,nombre) => { const r=await fetch(AUTH_EP("signup"),{method:"POST",headers:{"Content-Type":"application/json","apikey":SB_KEY},body:JSON.stringify({email,password:pwd,data:{nombre}})}); return r.json(); };
 const authSignIn = async (email,pwd) => { const r=await fetch(`${AUTH_EP("token")}?grant_type=password`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SB_KEY},body:JSON.stringify({email,password:pwd})}); return r.json(); };
+const authRefresh = async (refreshTok) => { const r=await fetch(`${AUTH_EP("token")}?grant_type=refresh_token`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SB_KEY},body:JSON.stringify({refresh_token:refreshTok})}); return r.json(); };
 const authSignOut = async (tok) => { await fetch(AUTH_EP("logout"),{method:"POST",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`}}); };
 
 // Storage
@@ -172,7 +173,7 @@ function AuthScreen({onAuth}){
     if(mode==="login"){
       if(!form.email||!form.password){setError("Completa todos los campos.");return;}
       setLoading(true);
-      try{const d=await authSignIn(form.email,form.password);if(d.error||!d.access_token){setError(d.error_description||"Credenciales incorrectas.");return;}localStorage.setItem("cirmi_token",d.access_token);onAuth(d.access_token,d.user);}catch{setError("Error de conexión.");}finally{setLoading(false);}
+      try{const d=await authSignIn(form.email,form.password);if(d.error||!d.access_token){setError(d.error_description||"Credenciales incorrectas.");return;}localStorage.setItem("cirmi_token",d.access_token);if(d.refresh_token)localStorage.setItem("cirmi_refresh",d.refresh_token);onAuth(d.access_token,d.user,d.refresh_token);}catch{setError("Error de conexión.");}finally{setLoading(false);}
     }else{
       if(!form.email||!form.password||!form.nombre){setError("Completa todos los campos.");return;}
       if(form.password!==form.confirm){setError("Las contraseñas no coinciden.");return;}
@@ -292,19 +293,51 @@ export default function App(){
   useEffect(()=>{const tok=localStorage.getItem("cirmi_token");if(tok)loadPerfil(tok);else setAuthLoading(false);},[]);
   const loadPerfil=async(tok)=>{
     try{
-      const r=await fetch(`${SB_URL}/auth/v1/user`,{headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`}});
+      let r=await fetch(`${SB_URL}/auth/v1/user`,{headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`}});
+      // Token expirado: intentar refrescar antes de cerrar sesión
+      if(r.status===401){
+        const rt=localStorage.getItem("cirmi_refresh");
+        if(rt){
+          const d=await authRefresh(rt);
+          if(d.access_token){
+            tok=d.access_token;
+            localStorage.setItem("cirmi_token",tok);
+            if(d.refresh_token)localStorage.setItem("cirmi_refresh",d.refresh_token);
+            r=await fetch(`${SB_URL}/auth/v1/user`,{headers:{"apikey":SB_KEY,"Authorization":`Bearer ${tok}`}});
+          }
+        }
+      }
       if(!r.ok){handleLogout();return;}
       const u=await r.json();setSession(tok);setAuthUser(u);
       const pf=await dbGet("perfiles",`id=eq.${u.id}`,tok);
       if(pf&&pf.length>0)setPerfil(pf[0]);
     }catch{handleLogout();}finally{setAuthLoading(false);}
   };
-  const handleAuth=async(tok,u)=>{setSession(tok);setAuthUser(u);setAuthLoading(true);try{const pf=await dbGet("perfiles",`id=eq.${u.id}`,tok);if(pf&&pf.length>0)setPerfil(pf[0]);}catch{}finally{setAuthLoading(false);};};
-  const handleLogout=async()=>{if(session)await authSignOut(session).catch(()=>{});localStorage.removeItem("cirmi_token");setSession(null);setAuthUser(null);setPerfil(null);};
+  const handleAuth=async(tok,u,refreshTok)=>{
+    setSession(tok);setAuthUser(u);setAuthLoading(true);
+    if(refreshTok)localStorage.setItem("cirmi_refresh",refreshTok);
+    try{const pf=await dbGet("perfiles",`id=eq.${u.id}`,tok);if(pf&&pf.length>0)setPerfil(pf[0]);}catch{}finally{setAuthLoading(false);};
+  };
+  const handleLogout=async()=>{if(session)await authSignOut(session).catch(()=>{});localStorage.removeItem("cirmi_token");localStorage.removeItem("cirmi_refresh");setSession(null);setAuthUser(null);setPerfil(null);};
 
   useEffect(()=>{if(session&&perfil?.estado==="aprobado")loadAll();},[session,perfil?.estado]);
   useEffect(()=>{if(isEnfermero&&!["agenda","quirofanos"].includes(tab))setTab("agenda");},[isEnfermero]);
   useEffect(()=>{window.scrollTo({top:0,behavior:"smooth"});},[tab]);
+  // Refresco automático de token cada 50 min (expira en 60 min)
+  useEffect(()=>{
+    if(!session)return;
+    const t=setInterval(async()=>{
+      const rt=localStorage.getItem("cirmi_refresh");
+      if(!rt)return;
+      const d=await authRefresh(rt).catch(()=>null);
+      if(d?.access_token){
+        localStorage.setItem("cirmi_token",d.access_token);
+        if(d.refresh_token)localStorage.setItem("cirmi_refresh",d.refresh_token);
+        setSession(d.access_token);
+      }
+    },50*60*1000);
+    return()=>clearInterval(t);
+  },[session]);
   useEffect(()=>{const t=setInterval(()=>{const s=fmt(new Date());if(s!==_liveDate)_setLiveDate(s);},30000);return()=>clearInterval(t);},[_liveDate]);
 
   const loadAll=async()=>{
